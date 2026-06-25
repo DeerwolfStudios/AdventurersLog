@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -21,7 +21,12 @@ import Svg, { Defs, Rect, RadialGradient, Stop } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { theme } from '../constants/theme';type SkillName =
+import { theme } from '../constants/theme';
+import { moderateScale, scale } from '../constants/responsive';
+import { StorageKeys } from '../constants/storage';
+import { Note, loadNotes, addNote, softDeleteNote, restoreNote, migrateManualEntries } from '../constants/notes';
+
+type SkillName =
   | 'Attack' | 'Defence' | 'Strength' | 'Hitpoints' | 'Ranged'
   | 'Prayer' | 'Magic' | 'Cooking' | 'Woodcutting' | 'Fletching'
   | 'Fishing' | 'Firemaking' | 'Crafting' | 'Smithing' | 'Mining'
@@ -185,7 +190,7 @@ function detectLevelUps(old: SkillSnapshot, next: SkillSnapshot): JournalEntry[]
   return entries;
 }
 
-const STORAGE_KEY = 'adventurers_log_characters';
+const STORAGE_KEY = StorageKeys.characters;
 
 async function loadCharacters(): Promise<Character[]> {
   try {
@@ -246,7 +251,7 @@ function BossCard({ name, kc }: { name: string; kc: number }) {
   );
 }
 
-function JournalCard({ entry }: { entry: JournalEntry }) {
+function JournalCard({ entry, onDelete }: { entry: JournalEntry; onDelete?: () => void }) {
   const isLevelUp = entry.type === 'levelup';
   const date = new Date(entry.timestamp);
   const dateStr = date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -272,6 +277,11 @@ function JournalCard({ entry }: { entry: JournalEntry }) {
         {entry.detail ? <Text style={styles.journalCardDetail}>{entry.detail}</Text> : null}
         <Text style={styles.journalCardDate}>{dateStr} at {timeStr}</Text>
       </View>
+      {onDelete ? (
+        <TouchableOpacity style={styles.journalDelete} onPress={onDelete} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text style={styles.journalDeleteText}>✕</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }
@@ -289,6 +299,11 @@ export default function AdventurersLogScreen() {
   const [newEntryText, setNewEntryText] = useState('');
   const [newEntryDetail, setNewEntryDetail] = useState('');
   const [newEntryCategory, setNewEntryCategory] = useState<JournalEntry['category']>('Note');
+  // Per-username authored notes (ADR 0001), separate from the ephemeral journal.
+  const [notes, setNotes] = useState<Note[]>([]);
+  // Transient undo target after a note delete: { id, timer } shown as a snackbar.
+  const [undoNote, setUndoNote] = useState<{ id: string; text: string } | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeChar = characters.find((c) => c.id === activeCharId) ?? null;
 
@@ -299,10 +314,19 @@ export default function AdventurersLogScreen() {
 
   useEffect(() => {
     const init = async () => {
-      const chars = await loadCharacters();
+      let chars = await loadCharacters();
+      // One-time migration: lift in-character `manual` entries into the per-username
+      // note store, then strip them from the journal. Write-new-before-strip-old:
+      // only strip if the migration actually wrote (returns true).
+      const migrated = await migrateManualEntries(chars);
+      if (migrated) {
+        chars = chars.map((c) => ({ ...c, journal: c.journal.filter((e) => e.type !== 'manual') }));
+        await saveCharacters(chars);
+      }
       setCharacters(chars);
       if (chars.length > 0) {
         setActiveCharId(chars[0].id);
+        setNotes(await loadNotes(chars[0].username));
         setAutoChecking(true);
         const updated = await Promise.all(
           chars.map(async (char) => {
@@ -327,6 +351,29 @@ export default function AdventurersLogScreen() {
     };
     init();
   }, []);
+
+  // Reload notes when the active character changes (notes are username-keyed).
+  const activeUsername = activeChar?.username;
+  useEffect(() => {
+    if (!activeUsername) { setNotes([]); return; }
+    loadNotes(activeUsername).then(setNotes);
+  }, [activeUsername]);
+
+  // The Journal view is a render-time merge (ADR 0001): ephemeral Auto Entries from
+  // the character's journal + authored Notes from the per-username store, newest first.
+  const journalItems = React.useMemo(() => {
+    const autoEntries = (activeChar?.journal ?? [])
+      .filter((e) => e.type !== 'manual') // legacy manual entries are now Notes
+      .map((e) => ({ key: e.id, entry: e as JournalEntry, isNote: false }));
+    const noteItems = notes.map((n) => ({
+      key: n.id,
+      entry: { id: n.id, type: 'manual' as const, text: n.text, detail: n.detail, timestamp: n.timestamp, category: n.category } as JournalEntry,
+      isNote: true,
+    }));
+    return [...autoEntries, ...noteItems]
+      .sort((a, b) => b.entry.timestamp - a.entry.timestamp)
+      .slice(0, 50);
+  }, [activeChar?.journal, notes]);
 
   const handleCheckLevels = async () => {
     if (!activeChar) return;
@@ -382,15 +429,34 @@ export default function AdventurersLogScreen() {
 
   const handleAddEntry = async () => {
     if (!activeChar || !newEntryText.trim()) return;
-    const entry: JournalEntry = {
-      id: `${Date.now()}-manual`, type: 'manual',
-      text: newEntryText.trim(), detail: newEntryDetail.trim() || undefined,
-      timestamp: Date.now(), category: newEntryCategory,
+    // Authored notes go to the per-username note store, not the ephemeral journal.
+    const note: Note = {
+      id: `${Date.now()}-note`,
+      text: newEntryText.trim(),
+      detail: newEntryDetail.trim() || undefined,
+      timestamp: Date.now(),
+      category: newEntryCategory,
     };
-    const updated = characters.map((c) => c.id === activeChar.id ? { ...c, journal: [entry, ...c.journal] } : c);
-    await persist(updated);
+    setNotes(await addNote(activeChar.username, note));
     setNewEntryText(''); setNewEntryDetail(''); setNewEntryCategory('Note');
     setShowAddEntry(false);
+  };
+
+  const handleDeleteNote = async (id: string) => {
+    if (!activeChar) return;
+    const deleted = notes.find((n) => n.id === id);
+    setNotes(await softDeleteNote(activeChar.username, id));
+    // Show a transient single-action undo; auto-dismiss after the window.
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    setUndoNote(deleted ? { id, text: deleted.text } : null);
+    undoTimer.current = setTimeout(() => setUndoNote(null), 5000);
+  };
+
+  const handleUndoDelete = async () => {
+    if (!activeChar || !undoNote) return;
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    setNotes(await restoreNote(activeChar.username, undoNote.id));
+    setUndoNote(null);
   };
 
   const handleDeleteCharacter = () => {
@@ -579,14 +645,20 @@ export default function AdventurersLogScreen() {
                       <Text style={styles.addButtonText}>+ Entry</Text>
                     </TouchableOpacity>
                   </View>
-                  {activeChar.journal.length === 0 ? (
+                  {journalItems.length === 0 ? (
                     <View style={styles.emptyState}>
                       <Image source={COMBAT_ICON} style={styles.emptyStateIcon} resizeMode="contain" />
                       <Text style={styles.emptyStateText}>No events yet.</Text>
                       <Text style={styles.emptyStateSubtext}>Log out of OSRS then open this screen — any level ups will appear here automatically.</Text>
                     </View>
                   ) : (
-                    activeChar.journal.slice(0, 50).map((entry) => <JournalCard key={entry.id} entry={entry} />)
+                    journalItems.map((item) => (
+                      <JournalCard
+                        key={item.key}
+                        entry={item.entry}
+                        onDelete={item.isNote ? () => handleDeleteNote(item.entry.id) : undefined}
+                      />
+                    ))
                   )}
                 </View>
               </>
@@ -663,6 +735,15 @@ export default function AdventurersLogScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {undoNote ? (
+        <View style={styles.undoBar}>
+          <Text style={styles.undoText} numberOfLines={1}>Note deleted</Text>
+          <TouchableOpacity onPress={handleUndoDelete} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.undoAction}>UNDO</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -672,82 +753,87 @@ const styles = StyleSheet.create({
   scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingBottom: 40 },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  loadingText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchmentDim },
+  loadingText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchmentDim },
   autoCheckBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.colors.panel, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 12 },
-  autoCheckText: { fontFamily: theme.fonts.display, fontSize: 12, color: theme.colors.parchmentDim },
+  autoCheckText: { fontFamily: theme.fonts.display, fontSize: moderateScale(12), color: theme.colors.parchmentDim },
   header: { alignItems: 'center', paddingTop: 10, paddingBottom: 6, marginBottom: 12, gap: 8 },
   backButton: { alignSelf: 'flex-start', paddingVertical: 4, paddingBottom: 10 },
-  backButtonText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.gold, letterSpacing: 0.5 },
-  screenTitle: { fontFamily: theme.fonts.display, fontSize: 34, color: theme.colors.gold, letterSpacing: 1, textShadowColor: 'rgba(200,160,48,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12, includeFontPadding: false, lineHeight: 42 },
-  screenSubtitle: { fontFamily: theme.fonts.display, fontSize: 14, color: theme.colors.parchmentDim, fontStyle: 'italic', letterSpacing: 1, includeFontPadding: false },
+  backButtonText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.gold, letterSpacing: 0.5 },
+  screenTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(34), color: theme.colors.gold, letterSpacing: 1, textShadowColor: 'rgba(200,160,48,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12, includeFontPadding: false, lineHeight: moderateScale(42) },
+  screenSubtitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(14), color: theme.colors.parchmentDim, fontStyle: 'italic', letterSpacing: 1, includeFontPadding: false },
   ornamentRow: { flexDirection: 'row', alignItems: 'center', width: '90%', gap: 6 },
   taglineRow: { flexDirection: 'row', alignItems: 'center', width: '90%', gap: 6 },
   ornamentLine: { flex: 1, height: 1, backgroundColor: theme.colors.border },
-  ornamentSymbol: { color: theme.colors.goldDim, fontSize: 10 },
-  ornamentLabel: { fontFamily: theme.fonts.display, fontSize: 11, color: theme.colors.goldDim, letterSpacing: 3, textTransform: 'uppercase', includeFontPadding: false },
+  ornamentSymbol: { color: theme.colors.goldDim, fontSize: moderateScale(10) },
+  ornamentLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(11), color: theme.colors.goldDim, letterSpacing: 3, textTransform: 'uppercase', includeFontPadding: false },
   section: { marginBottom: 20 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  sectionTitle: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.goldLight, letterSpacing: 2, textTransform: 'uppercase', includeFontPadding: false },
+  sectionTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.goldLight, letterSpacing: 2, textTransform: 'uppercase', includeFontPadding: false },
   skillsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 20 },
   diamond: { width: 6, height: 6, backgroundColor: theme.colors.gold, transform: [{ rotate: '45deg' }], flexShrink: 0 },
   addButton: { borderWidth: 1, borderColor: theme.colors.borderGold, borderRadius: 3, paddingHorizontal: 12, paddingVertical: 6 },
-  addButtonText: { fontFamily: theme.fonts.display, fontSize: 15, color: theme.colors.gold, fontWeight: 'bold' },
+  addButtonText: { fontFamily: theme.fonts.display, fontSize: moderateScale(15), color: theme.colors.gold, fontWeight: 'bold' },
   charChip: { borderWidth: 1.5, borderColor: theme.colors.border, borderRadius: 3, paddingHorizontal: 16, paddingVertical: 10, marginRight: 8, backgroundColor: theme.colors.panel },
   charChipActive: { borderColor: theme.colors.borderGold, backgroundColor: theme.colors.panelLight },
-  charChipText: { fontFamily: theme.fonts.display, fontSize: 14, color: theme.colors.parchmentDim },
+  charChipText: { fontFamily: theme.fonts.display, fontSize: moderateScale(14), color: theme.colors.parchmentDim },
   charChipTextActive: { color: theme.colors.goldLight },
   charPanel: { borderWidth: 1.5, borderColor: theme.colors.border, borderRadius: 4, backgroundColor: theme.colors.panel, padding: 16, gap: 14, marginBottom: 20 },
   charPanelTop: { flexDirection: 'row', alignItems: 'flex-start' },
-  charName: { fontFamily: theme.fonts.display, fontSize: 22, color: theme.colors.parchment, letterSpacing: 0.5 },
-  charLastChecked: { fontFamily: theme.fonts.display, fontSize: 15, color: theme.colors.textMuted, marginTop: 3 },
+  charName: { fontFamily: theme.fonts.display, fontSize: moderateScale(22), color: theme.colors.parchment, letterSpacing: 0.5 },
+  charLastChecked: { fontFamily: theme.fonts.display, fontSize: moderateScale(15), color: theme.colors.textMuted, marginTop: 3 },
   removeButton: { paddingLeft: 12, paddingTop: 4 },
-  deleteText: { fontFamily: theme.fonts.display, fontSize: 15, color: theme.colors.redLight, fontWeight: 'bold' },
+  deleteText: { fontFamily: theme.fonts.display, fontSize: moderateScale(15), color: theme.colors.redLight, fontWeight: 'bold' },
   statRow: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: theme.colors.border, borderBottomWidth: 1, borderBottomColor: theme.colors.border, paddingVertical: 12 },
   statBlock: { flex: 1, alignItems: 'center', gap: 3 },
-  statValue: { fontFamily: theme.fonts.display, fontSize: 34, color: theme.colors.goldLight, includeFontPadding: false },
-  statLabel: { fontFamily: theme.fonts.display, fontSize: 12, color: theme.colors.parchmentDark, letterSpacing: 1, textTransform: 'uppercase', includeFontPadding: false },
+  statValue: { fontFamily: theme.fonts.display, fontSize: moderateScale(34), color: theme.colors.goldLight, includeFontPadding: false },
+  statLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(12), color: theme.colors.parchmentDark, letterSpacing: 1, textTransform: 'uppercase', includeFontPadding: false },
   statDivider: { width: 1, height: 36, backgroundColor: theme.colors.border },
   checkButtonInner: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  checkButtonIcon: { width: 22, height: 22 },
+  checkButtonIcon: { width: scale(22), height: scale(22) },
   skillsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, paddingBottom: 2 },
   skillCell: { width: '30%', backgroundColor: theme.colors.panel, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 4, paddingVertical: 10, paddingHorizontal: 4, alignItems: 'center', gap: 4 },
   skillCellMaxed: { borderColor: theme.colors.borderGold, backgroundColor: theme.colors.panelLight },
-  skillIcon: { width: 30, height: 30 },
-  skillLevel: { fontFamily: theme.fonts.display, fontSize: 23, color: theme.colors.parchment, includeFontPadding: false },
+  skillIcon: { width: scale(30), height: scale(30) },
+  skillLevel: { fontFamily: theme.fonts.display, fontSize: moderateScale(23), color: theme.colors.parchment, includeFontPadding: false },
   skillLevelMaxed: { color: theme.colors.goldLight },
-  skillName: { fontFamily: theme.fonts.display, fontSize: 17, color: theme.colors.parchmentDark, textAlign: 'center', includeFontPadding: false },
+  skillName: { fontFamily: theme.fonts.display, fontSize: moderateScale(17), color: theme.colors.parchmentDark, textAlign: 'center', includeFontPadding: false },
   bossGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   bossCard: { width: '30%', backgroundColor: theme.colors.panel, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 4, paddingVertical: 10, paddingHorizontal: 8, alignItems: 'center', gap: 4, flexGrow: 1 },
-  bossName: { fontFamily: theme.fonts.display, fontSize: 15, color: theme.colors.parchmentDark, textAlign: 'center', includeFontPadding: false },
-  bossKC: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.goldLight, includeFontPadding: false },
+  bossName: { fontFamily: theme.fonts.display, fontSize: moderateScale(15), color: theme.colors.parchmentDark, textAlign: 'center', includeFontPadding: false },
+  bossKC: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.goldLight, includeFontPadding: false },
   journalCard: { flexDirection: 'row', backgroundColor: theme.colors.panel, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 4, padding: 12, marginBottom: 8, gap: 12, alignItems: 'flex-start' },
   journalCardLevelUp: { borderColor: theme.colors.borderGold, backgroundColor: theme.colors.panelLight },
   journalCardLeft: { width: 32, alignItems: 'center', paddingTop: 2 },
-  journalSkillIcon: { width: 26, height: 26 },
+  journalSkillIcon: { width: scale(26), height: scale(26) },
   journalCardContent: { flex: 1, gap: 4 },
-  journalCardText: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.parchment, lineHeight: 26, includeFontPadding: false },
+  journalCardText: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.parchment, lineHeight: moderateScale(26), includeFontPadding: false },
   journalCardTextLevelUp: { color: theme.colors.goldLight },
-  journalCardDetail: { fontFamily: theme.fonts.display, fontSize: 17, color: theme.colors.parchmentDim, lineHeight: 22, includeFontPadding: false },
-  journalCardDate: { fontFamily: theme.fonts.display, fontSize: 16, color: theme.colors.textMuted, marginTop: 2, includeFontPadding: false },
+  journalCardDetail: { fontFamily: theme.fonts.display, fontSize: moderateScale(17), color: theme.colors.parchmentDim, lineHeight: moderateScale(22), includeFontPadding: false },
+  journalCardDate: { fontFamily: theme.fonts.display, fontSize: moderateScale(16), color: theme.colors.textMuted, marginTop: 2, includeFontPadding: false },
+  journalDelete: { paddingLeft: scale(8), paddingTop: 2, alignSelf: 'flex-start' },
+  journalDeleteText: { fontFamily: theme.fonts.display, fontSize: moderateScale(16), color: theme.colors.textMuted },
+  undoBar: { position: 'absolute', left: scale(16), right: scale(16), bottom: scale(24), flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.colors.panelLight, borderWidth: 1, borderColor: theme.colors.borderGold, borderRadius: 4, paddingHorizontal: scale(16), paddingVertical: scale(12), gap: scale(12) },
+  undoText: { fontFamily: theme.fonts.display, fontSize: moderateScale(16), color: theme.colors.parchment, flex: 1 },
+  undoAction: { fontFamily: theme.fonts.display, fontSize: moderateScale(16), color: theme.colors.goldLight, letterSpacing: 1 },
   emptyState: { alignItems: 'center', paddingVertical: 32, gap: 10 },
-  emptyStateIcon: { width: 30, height: 30 },
-  emptyStateText: { fontFamily: theme.fonts.display, fontSize: 30, color: theme.colors.parchmentDim, includeFontPadding: false },
-  emptyStateSubtext: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.textMuted, textAlign: 'center', lineHeight: 24, paddingBottom: 10, paddingHorizontal: 20, includeFontPadding: false },
+  emptyStateIcon: { width: scale(30), height: scale(30) },
+  emptyStateText: { fontFamily: theme.fonts.display, fontSize: moderateScale(30), color: theme.colors.parchmentDim, includeFontPadding: false },
+  emptyStateSubtext: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.textMuted, textAlign: 'center', lineHeight: moderateScale(24), paddingBottom: 10, paddingHorizontal: 20, includeFontPadding: false },
   primaryButton: { backgroundColor: theme.colors.gold, borderRadius: 6, paddingVertical: 13, paddingHorizontal: 25, alignItems: 'center', justifyContent: 'center' },
   primaryButtonDisabled: { backgroundColor: theme.colors.goldDim },
-  primaryButtonText: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.background, letterSpacing: 0.5, fontWeight: 'bold' },
+  primaryButtonText: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.background, letterSpacing: 0.5, fontWeight: 'bold' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.78)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   modalBox: { width: '100%', backgroundColor: theme.colors.panel, borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 4, padding: 20, gap: 12 },
-  modalTitle: { fontFamily: theme.fonts.display, fontSize: 22, color: theme.colors.goldLight, letterSpacing: 1 },
-  modalSubtitle: { fontFamily: theme.fonts.display, fontSize: 17, color: theme.colors.parchmentDim, lineHeight: 22 },
+  modalTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(22), color: theme.colors.goldLight, letterSpacing: 1 },
+  modalSubtitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(17), color: theme.colors.parchmentDim, lineHeight: moderateScale(22) },
   modalButtons: { flexDirection: 'row', gap: 10, marginTop: 4 },
   modalCancel: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, paddingVertical: 13, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
-  modalCancelText: { fontFamily: theme.fonts.display, fontSize: 17, color: theme.colors.parchmentDim },
-  input: { borderWidth: 1.5, borderColor: theme.colors.border, borderRadius: 3, backgroundColor: theme.colors.background, paddingHorizontal: 12, paddingVertical: 11, fontFamily: theme.fonts.display, fontSize: 16, color: theme.colors.parchment },
+  modalCancelText: { fontFamily: theme.fonts.display, fontSize: moderateScale(17), color: theme.colors.parchmentDim },
+  input: { borderWidth: 1.5, borderColor: theme.colors.border, borderRadius: 3, backgroundColor: theme.colors.background, paddingHorizontal: 12, paddingVertical: 11, fontFamily: theme.fonts.display, fontSize: moderateScale(16), color: theme.colors.parchment },
   inputMultiline: { minHeight: 80, textAlignVertical: 'top' },
   categoryRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
   categoryChip: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme.colors.background },
   categoryChipActive: { borderColor: theme.colors.borderGold, backgroundColor: theme.colors.panelLight },
-  categoryChipText: { fontFamily: theme.fonts.display, fontSize: 15, color: theme.colors.parchmentDim },
+  categoryChipText: { fontFamily: theme.fonts.display, fontSize: moderateScale(15), color: theme.colors.parchmentDim },
   categoryChipTextActive: { color: theme.colors.goldLight },
 });

@@ -9,6 +9,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Defs, Rect, RadialGradient, Stop } from 'react-native-svg';
 import { theme } from '../../constants/theme';
+import { moderateScale, scale } from '../../constants/responsive';
 import {
   Loadout, EQUIPMENT_SLOTS, SlotKey, ItemStats, GearSlots,
   getTotalStats, CombatStyle, AttackStyle, MonsterStats,
@@ -17,8 +18,9 @@ import {
 import { PRAYERS } from '../../constants/prayers';
 import { calculateDPS, DEFAULT_MONSTER } from '../../constants/dps-formula';
 import { searchItems, fetchItemStats, searchMonsters, fetchMonsterStats, COMMON_MONSTERS, WikiSearchResult } from '../../constants/wiki-api';
+import { StorageKeys } from '../../constants/storage';
 
-const STORAGE_KEY = 'gear_planner_loadouts';
+const STORAGE_KEY = StorageKeys.gearLoadouts;
 
 //  Hiscore fetch (lightweight — levels only) 
 
@@ -139,7 +141,7 @@ const divStyles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 25 },
   line: { flex: 1, height: 1, backgroundColor: theme.colors.border },
   diamond: { width: 5, height: 5, backgroundColor: theme.colors.gold, transform: [{ rotate: '45deg' }] },
-  title: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.goldLight, letterSpacing: 2, textTransform: 'uppercase' },
+  title: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.goldLight, letterSpacing: 2, textTransform: 'uppercase' },
 });
 
 function StatRow({ label, value }: { label: string; value: number }) {
@@ -153,8 +155,8 @@ function StatRow({ label, value }: { label: string; value: number }) {
 }
 const srStyles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  label: { fontFamily: theme.fonts.display, fontSize: 15, color: theme.colors.parchmentDim },
-  value: { fontFamily: theme.fonts.display, fontSize: 20, fontWeight: 'bold' },
+  label: { fontFamily: theme.fonts.display, fontSize: moderateScale(15), color: theme.colors.parchmentDim },
+  value: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), fontWeight: 'bold' },
 });
 
 // Equipment Layout
@@ -197,16 +199,16 @@ function EquipmentGrid({ gear, onSlotPress }: { gear: GearSlots; onSlotPress: (s
 const eqStyles = StyleSheet.create({
   container: { gap: 6, marginTop: 10 },
   row: { flexDirection: 'row', justifyContent: 'center', gap: 6 },
-  emptyCell: { width: 96, height: 80 },
+  emptyCell: { width: scale(96), height: scale(80) },
   slot: {
     width: 96, height: 80, backgroundColor: theme.colors.panel,
     borderWidth: 1.5, borderColor: theme.colors.border, borderRadius: 4,
     alignItems: 'center', justifyContent: 'center', gap: 4, padding: 4,
   },
   slotFilled: { borderColor: theme.colors.borderGold, backgroundColor: theme.colors.panelLight },
-  itemImage: { width: 36, height: 36 },
-  slotEmoji: { fontSize: 24 },
-  slotLabel: { fontFamily: theme.fonts.display, fontSize: 11, color: theme.colors.parchmentDark, textAlign: 'center' },
+  itemImage: { width: scale(36), height: scale(36) },
+  slotEmoji: { fontSize: moderateScale(24) },
+  slotLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(11), color: theme.colors.parchmentDark, textAlign: 'center' },
 });
 
 //  Main Screen
@@ -871,95 +873,95 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { paddingHorizontal: 16, paddingBottom: 40 },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  loadingText: { fontFamily: theme.fonts.display, fontSize: 14, color: theme.colors.parchmentDim },
+  loadingText: { fontFamily: theme.fonts.display, fontSize: moderateScale(14), color: theme.colors.parchmentDim },
 
   header: { alignItems: 'center', paddingTop: 10, paddingBottom: 6, marginBottom: 4, gap: 8 },
   backButton: { alignSelf: 'flex-start', paddingVertical: 4, paddingBottom: 6 },
-  backButtonText: { fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.gold, letterSpacing: 0.5 },
+  backButtonText: { fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.gold, letterSpacing: 0.5 },
   screenTitle: {
-    fontFamily: theme.fonts.display, fontSize: 28, color: theme.colors.gold, letterSpacing: 1,
+    fontFamily: theme.fonts.display, fontSize: moderateScale(28), color: theme.colors.gold, letterSpacing: 1,
     textShadowColor: 'rgba(200,160,48,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10,
-    includeFontPadding: false, lineHeight: 36, textAlign: 'center',
+    includeFontPadding: false, lineHeight: moderateScale(36), textAlign: 'center',
   },
-  screenSubtitle: { fontFamily: theme.fonts.display, fontSize: 15, color: theme.colors.parchmentDim, fontStyle: 'italic', letterSpacing: 1 },
+  screenSubtitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(15), color: theme.colors.parchmentDim, fontStyle: 'italic', letterSpacing: 1 },
   taglineRow: { flexDirection: 'row', alignItems: 'center', width: '90%', gap: 6 },
   ornamentLine: { flex: 1, height: 1, backgroundColor: theme.colors.border },
-  ornamentSymbol: { color: theme.colors.goldDim, fontSize: 10 },
+  ornamentSymbol: { color: theme.colors.goldDim, fontSize: moderateScale(10) },
 
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4, justifyContent: 'center' },
   chip: { borderWidth: 1.5, borderColor: theme.colors.border, borderRadius: 5, paddingHorizontal: 15, paddingVertical: 15, backgroundColor: theme.colors.panel },
   chipActive: { borderColor: theme.colors.borderGold, backgroundColor: theme.colors.panelLight },
-  chipText: { fontFamily: theme.fonts.display, fontSize: 14, color: theme.colors.parchmentDim },
+  chipText: { fontFamily: theme.fonts.display, fontSize: moderateScale(14), color: theme.colors.parchmentDim },
   chipTextActive: { color: theme.colors.goldLight },
 
   selectorButton: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: theme.colors.panel, borderWidth: 1.5, borderColor: theme.colors.border, borderRadius: 4, paddingHorizontal: 14, paddingVertical: 12 },
-  selectorButtonText: { fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.parchment, flex: 1 },
-  selectorArrow: { fontFamily: theme.fonts.display, fontSize: 22, color: theme.colors.gold },
+  selectorButtonText: { fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.parchment, flex: 1 },
+  selectorArrow: { fontFamily: theme.fonts.display, fontSize: moderateScale(22), color: theme.colors.gold },
 
   activePrayers: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
   activePrayerChip: { backgroundColor: theme.colors.panelLight, borderWidth: 1, borderColor: theme.colors.borderGold, borderRadius: 5, paddingHorizontal: 15, paddingVertical: 12, justifyContent: 'center', alignItems: 'center' },
-  activePrayerText: { fontFamily: theme.fonts.display, fontSize: 16, color: theme.colors.goldLight },
+  activePrayerText: { fontFamily: theme.fonts.display, fontSize: moderateScale(16), color: theme.colors.goldLight },
 
   monsterStats: { backgroundColor: theme.colors.panel, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 5, padding: 10, marginTop: 8, gap: 4 },
-  monsterStatText: { fontFamily: theme.fonts.display, fontSize: 17, color: theme.colors.parchmentDim },
+  monsterStatText: { fontFamily: theme.fonts.display, fontSize: moderateScale(17), color: theme.colors.parchmentDim },
 
   statsPanel: { flexDirection: 'row', backgroundColor: theme.colors.panel, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 4, padding: 15, marginBottom: 8 },
   statsCol: { flex: 1, gap: 2 },
   statsDivider: { width: 1, backgroundColor: theme.colors.border, marginHorizontal: 12 },
-  statsGroupLabel: { fontFamily: theme.fonts.display, fontSize: 17, color: theme.colors.gold, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
+  statsGroupLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(17), color: theme.colors.gold, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
 
   spellRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.colors.panel, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 4, paddingHorizontal: 14, paddingVertical: 10 },
-  spellLabel: { fontFamily: theme.fonts.display, fontSize: 17, color: theme.colors.parchment },
-  spellInput: { borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 5, backgroundColor: theme.colors.background, paddingHorizontal: 10, paddingVertical: 6, fontFamily: theme.fonts.display, fontSize: 16, color: theme.colors.goldLight, width: 60, textAlign: 'center' },
+  spellLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(17), color: theme.colors.parchment },
+  spellInput: { borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 5, backgroundColor: theme.colors.background, paddingHorizontal: 10, paddingVertical: 6, fontFamily: theme.fonts.display, fontSize: moderateScale(16), color: theme.colors.goldLight, width: 60, textAlign: 'center' },
 
   dpsPanel: { backgroundColor: theme.colors.panel, borderWidth: 1, borderColor: theme.colors.borderGold, borderRadius: 4, padding: 16, gap: 10 },
   dpsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   dpsStat: { flex: 1, alignItems: 'center', gap: 4 },
-  dpsValue: { fontFamily: theme.fonts.display, fontSize: 32, color: theme.colors.goldLight, includeFontPadding: false },
-  dpsLabel: { fontFamily: theme.fonts.display, fontSize: 13, color: theme.colors.parchmentDark, letterSpacing: 1, textTransform: 'uppercase' },
+  dpsValue: { fontFamily: theme.fonts.display, fontSize: moderateScale(32), color: theme.colors.goldLight, includeFontPadding: false },
+  dpsLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(13), color: theme.colors.parchmentDark, letterSpacing: 1, textTransform: 'uppercase' },
   dpsDivider: { width: 1, height: 40, backgroundColor: theme.colors.border },
   dpsRow2: { alignItems: 'center' },
-  dpsSubtext: { fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.textMuted, textAlign: 'center' },
+  dpsSubtext: { fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.textMuted, textAlign: 'center' },
   dpsTtk: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 10 },
-  dpsTtkLabel: { fontFamily: theme.fonts.display, fontSize: 13, color: theme.colors.parchmentDark, letterSpacing: 1, textTransform: 'uppercase' },
-  dpsTtkValue: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.gold },
+  dpsTtkLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(13), color: theme.colors.parchmentDark, letterSpacing: 1, textTransform: 'uppercase' },
+  dpsTtkValue: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.gold },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
   modalBox: { backgroundColor: theme.colors.panel, borderTopWidth: 2, borderTopColor: theme.colors.borderGold, borderTopLeftRadius: 12, borderTopRightRadius: 12, padding: 20, gap: 12, maxHeight: '90%' },
-  modalTitle: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.goldLight, letterSpacing: 1 },
-  input: { borderWidth: 1.5, borderColor: theme.colors.border, borderRadius: 5, backgroundColor: theme.colors.background, paddingHorizontal: 12, paddingVertical: 11, fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchment },
+  modalTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.goldLight, letterSpacing: 1 },
+  input: { borderWidth: 1.5, borderColor: theme.colors.border, borderRadius: 5, backgroundColor: theme.colors.background, paddingHorizontal: 12, paddingVertical: 11, fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchment },
   resultsList: { maxHeight: 300 },
   resultItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  resultItemImage: { width: 28, height: 28 },
-  resultItemText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchment, flex: 1 },
-  resultItemMeta: { fontFamily: theme.fonts.display, fontSize: 15, color: theme.colors.textMuted },
-  noResults: { fontFamily: theme.fonts.display, fontSize: 13, color: theme.colors.textMuted, textAlign: 'center', paddingVertical: 20 },
-  commonLabel: { fontFamily: theme.fonts.display, fontSize: 12, color: theme.colors.parchmentDark, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
+  resultItemImage: { width: scale(28), height: scale(28) },
+  resultItemText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchment, flex: 1 },
+  resultItemMeta: { fontFamily: theme.fonts.display, fontSize: moderateScale(15), color: theme.colors.textMuted },
+  noResults: { fontFamily: theme.fonts.display, fontSize: moderateScale(13), color: theme.colors.textMuted, textAlign: 'center', paddingVertical: 20 },
+  commonLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(12), color: theme.colors.parchmentDark, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
   removeItemBtn: { backgroundColor: theme.colors.panel, borderWidth: 1, borderColor: theme.colors.redLight, borderRadius: 5, paddingVertical: 8, paddingHorizontal: 12, alignItems: 'center' },
-  removeItemBtnText: { fontFamily: theme.fonts.display, fontSize: 13, color: theme.colors.redLight },
+  removeItemBtnText: { fontFamily: theme.fonts.display, fontSize: moderateScale(13), color: theme.colors.redLight },
   cancelBtn: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 5, paddingVertical: 12, alignItems: 'center' },
-  cancelBtnText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchmentDim },
+  cancelBtnText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchmentDim },
   primaryBtn: { backgroundColor: theme.colors.gold, borderRadius: 5, paddingVertical: 12, alignItems: 'center' },
-  primaryBtnText: { fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.background, fontWeight: 'bold' },
+  primaryBtnText: { fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.background, fontWeight: 'bold' },
 
   prayerList: { maxHeight: 320 },
   prayerRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.colors.border, gap: 10 },
   prayerRowActive: { backgroundColor: theme.colors.panelLight },
-  prayerName: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchment, paddingLeft: 10 },
+  prayerName: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchment, paddingLeft: 10 },
   prayerNameActive: { color: theme.colors.goldLight },
-  prayerDesc: { fontFamily: theme.fonts.display, fontSize: 17, color: theme.colors.textMuted, marginTop: 2, paddingLeft: 10 },
-  prayerCheck: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, marginRight: 10, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },
+  prayerDesc: { fontFamily: theme.fonts.display, fontSize: moderateScale(17), color: theme.colors.textMuted, marginTop: 2, paddingLeft: 10 },
+  prayerCheck: { width: scale(22), height: scale(22), borderRadius: 11, borderWidth: 1.5, marginRight: 10, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },
   prayerCheckActive: { backgroundColor: theme.colors.gold, borderColor: theme.colors.gold },
-  prayerCheckMark: { color: theme.colors.background, fontSize: 13, fontWeight: 'bold' },
+  prayerCheckMark: { color: theme.colors.background, fontSize: moderateScale(13), fontWeight: 'bold' },
 
   statInputRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  statInputLabel: { fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.parchment },
-  statInput: { borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 5, backgroundColor: theme.colors.background, paddingHorizontal: 10, paddingVertical: 6, fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.goldLight, width: 60, textAlign: 'center' },
+  statInputLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.parchment },
+  statInput: { borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 5, backgroundColor: theme.colors.background, paddingHorizontal: 10, paddingVertical: 6, fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.goldLight, width: 60, textAlign: 'center' },
 
   // Player search
   playerSearchRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   playerSearchBtn: { backgroundColor: theme.colors.gold, borderRadius: 5, paddingVertical: 11, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center' },
   playerSearchBtnDisabled: { backgroundColor: theme.colors.goldDim },
-  playerSearchBtnText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.background, fontWeight: 'bold' },
-  playerSearchHint: { fontFamily: theme.fonts.display, fontSize: 15, color: theme.colors.textMuted, fontStyle: 'italic' },
+  playerSearchBtnText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.background, fontWeight: 'bold' },
+  playerSearchHint: { fontFamily: theme.fonts.display, fontSize: moderateScale(15), color: theme.colors.textMuted, fontStyle: 'italic' },
 });

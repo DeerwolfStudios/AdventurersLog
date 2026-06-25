@@ -9,10 +9,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { theme } from '../constants/theme';
-
-const WIKI_API    = 'https://oldschool.runescape.wiki/api.php';
-const UA          = 'AdventurersLog-App/1.0';
-const STORAGE_KEY = 'quests_completed';
+import { moderateScale, scale } from '../constants/responsive';
+import { StorageKeys } from '../constants/storage';
+import { fetchWikitext } from '../constants/wiki';
+import { WikiSection, cleanWikitext, parseSections, matchesSection, extractSection } from '../constants/wikitext';
+const STORAGE_KEY = StorageKeys.questsCompleted;
 
 // Quest list
 
@@ -218,89 +219,14 @@ const DIFFICULTY_COLORS: Record<Difficulty, string> = {
 
 // Wiki API
 
-type QuestSection = { index: number; name: string };
-
 const QUEST_SECTIONS = ['details', 'walkthrough', 'rewards', 'required', 'recommended', 'starting', 'finishing'];
 
-function extractWikitext(page: any): string {
-  return page?.revisions?.[0]?.slots?.main?.['*']
-    ?? page?.revisions?.[0]?.['*']
-    ?? '';
-}
+// Delegates to the shared wiki client (which caches and handles errors).
+const fetchQuestWikitext = fetchWikitext;
 
-function cleanWikitext(raw: string): string {
-  return raw
-    .replace(/\{\{[^{}]*(?:\{\{[^{}]*\}\}[^{}]*)?\}\}/gs, '')
-    .replace(/\{\{|\}\}/g, '')
-    .replace(/\[\[(?:[^\]|]+\|)?([^\]]+)\]\]/g, '$1')
-    .replace(/\[\[|\]\]/g, '')
-    .replace(/\[https?:\/\/\S+\s([^\]]+)\]/g, '$1')
-    .replace(/\[https?:\/\/\S+\]/g, '')
-    .replace(/'{2,3}/g, '')
-    .replace(/<ref[^>]*>[\s\S]*?<\/ref>/g, '')
-    .replace(/<ref[^>]*\/>/g, '')
-    .replace(/<[^>]+>/g, '')
-    .replace(/\{\|[\s\S]*?\|\}/gs, '')
-    .replace(/^\s*[|!].*$/gm, '')
-    .replace(/^={2,6}\s*.+?\s*={2,6}\s*$/gm, '')
-    .replace(/^(right|left|center|thumb|frame|frameless|\d+px)[|].*$/gm, '')
-    .replace(/^\[\[(File|Image):[^\]]*\]\]$/gm, '')
-    .replace(/^\*{1,3}\s*/gm, '')
-    .replace(/^#{1,3}\s*/gm, '')
-    .replace(/^:+\s*/gm, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
-const _wikitextCache: Record<string, string> = {};
-
-async function fetchQuestWikitext(name: string): Promise<string> {
-  if (_wikitextCache[name]) return _wikitextCache[name];
-  try {
-    const url = `${WIKI_API}?action=query&prop=revisions&rvprop=content&rvslots=*&titles=${encodeURIComponent(name)}&format=json&origin=*`;
-    const res = await fetch(url, { headers: { 'User-Agent': UA } });
-    const data = await res.json();
-    const pages = data?.query?.pages ?? {};
-    const page = Object.values(pages)[0] as any;
-    const wikitext = extractWikitext(page);
-    _wikitextCache[name] = wikitext;
-    return wikitext;
-  } catch { return ''; }
-}
-
-function parseQuestSections(wikitext: string): QuestSection[] {
-  const sections: QuestSection[] = [];
-  const lines = wikitext.split('\n');
-  let index = 0;
-  for (const line of lines) {
-    const match = line.match(/^(={2,4})\s*([^=]+?)\s*\1\s*$/);
-    if (match) {
-      index++;
-      const name = match[2].trim();
-      if (QUEST_SECTIONS.some((s) => name.toLowerCase().includes(s))) {
-        sections.push({ index, name });
-      }
-    }
-  }
-  return sections;
-}
-
-function extractSection(wikitext: string, targetIndex: number): string {
-  const lines = wikitext.split('\n');
-  let currentIndex = 0;
-  let inSection = false;
-  let sectionLevel = 2;
-  const out: string[] = [];
-  for (const line of lines) {
-    const match = line.match(/^(={2,4})\s*([^=]+?)\s*\1\s*$/);
-    if (match) {
-      currentIndex++;
-      if (inSection && match[1].length <= sectionLevel) break;
-      if (currentIndex === targetIndex) { inSection = true; sectionLevel = match[1].length; continue; }
-    }
-    if (inSection) out.push(line);
-  }
-  return cleanWikitext(out.join('\n')) || 'No content available.';
+// Quest screen wants only its relevant sections; the parse + match are shared.
+function parseQuestSections(wikitext: string): WikiSection[] {
+  return parseSections(wikitext).filter((s) => matchesSection(s, QUEST_SECTIONS));
 }
 
 function parseInfoboxValue(wikitext: string, key: string): string | null {
@@ -357,8 +283,8 @@ function ProgressBar({ completed, total, qpEarned, qpTotal }:
 const pbStyles = StyleSheet.create({
   container: { backgroundColor: theme.colors.panel, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 4, padding: 14, gap: 8 },
   row: { flexDirection: 'row', justifyContent: 'space-between' },
-  label: { fontFamily: theme.fonts.display, fontSize: 15, color: theme.colors.parchmentDark, letterSpacing: 1, textTransform: 'uppercase', paddingTop: 3 },
-  value: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.goldLight },
+  label: { fontFamily: theme.fonts.display, fontSize: moderateScale(15), color: theme.colors.parchmentDark, letterSpacing: 1, textTransform: 'uppercase', paddingTop: 3 },
+  value: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.goldLight },
   track: { height: 8, backgroundColor: theme.colors.background, borderRadius: 4, overflow: 'hidden', borderWidth: 1, marginBottom: 2, borderColor: theme.colors.border },
   fill: { height: '100%', backgroundColor: theme.colors.gold, borderRadius: 4 },
 });
@@ -375,7 +301,7 @@ function ExpandableSection({ title, questName, sectionIndex }:
     if (!expanded && content === null) {
       setLoading(true);
       const wikitext = await fetchQuestWikitext(questName);
-      setContent(extractSection(wikitext, sectionIndex));
+      setContent(cleanWikitext(extractSection(wikitext, sectionIndex)) || 'No content available.');
       setLoading(false);
     }
     setExpanded((v) => !v);
@@ -401,10 +327,10 @@ function ExpandableSection({ title, questName, sectionIndex }:
 const secStyles = StyleSheet.create({
   container: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, overflow: 'hidden', marginBottom: 4 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 11, paddingHorizontal: 12, backgroundColor: theme.colors.panelLight },
-  title: { fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.parchment, flex: 1 },
-  chevron: { color: theme.colors.gold, fontSize: 20, marginLeft: 8 },
+  title: { fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.parchment, flex: 1 },
+  chevron: { color: theme.colors.gold, fontSize: moderateScale(20), marginLeft: 8 },
   body: { backgroundColor: theme.colors.background, padding: 12 },
-  content: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchmentDim, lineHeight: 27 },
+  content: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchmentDim, lineHeight: moderateScale(27) },
 });
 
 // Quest Detail Panel
@@ -416,7 +342,7 @@ type QuestDetailProps = {
 };
 
 function QuestDetailPanel({ quest, completed, onToggleComplete }: QuestDetailProps) {
-  const [sections, setSections] = useState<QuestSection[]>([]);
+  const [sections, setSections] = useState<WikiSection[]>([]);
   const [loadingSections, setLoadingSections] = useState(true);
   const [description, setDescription] = useState<string>('');
 
@@ -482,7 +408,7 @@ function QuestDetailPanel({ quest, completed, onToggleComplete }: QuestDetailPro
           {sections.map((s) => (
             <ExpandableSection
               key={s.index}
-              title={s.name}
+              title={s.title}
               questName={quest.name}
               sectionIndex={s.index}
             />
@@ -505,26 +431,26 @@ function QuestDetailPanel({ quest, completed, onToggleComplete }: QuestDetailPro
 const qdStyles = StyleSheet.create({
   container: { backgroundColor: theme.colors.panel, borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 4, padding: 14, gap: 12 },
   header: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
-  icon: { width: 36, height: 36, marginTop: 2 },
-  name: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.parchment, letterSpacing: 0.3, includeFontPadding: false },
+  icon: { width: scale(36), height: scale(36), marginTop: 2 },
+  name: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.parchment, letterSpacing: 0.3, includeFontPadding: false },
   tagRow: { flexDirection: 'row', gap: 6, marginTop: 10, flexWrap: 'wrap' },
   tag: { backgroundColor: theme.colors.panelLight, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, paddingHorizontal: 8, paddingVertical: 3 },
-  tagText: { fontFamily: theme.fonts.display, fontSize: 16, color: theme.colors.parchmentDim },
+  tagText: { fontFamily: theme.fonts.display, fontSize: moderateScale(16), color: theme.colors.parchmentDim },
   diffTag: { borderWidth: 1, borderRadius: 3, paddingHorizontal: 9, paddingVertical: 4, backgroundColor: theme.colors.background },
-  diffText: { fontFamily: theme.fonts.display, fontSize: 16, fontWeight: 'bold' },
+  diffText: { fontFamily: theme.fonts.display, fontSize: moderateScale(16), fontWeight: 'bold' },
   qpTag: { borderColor: theme.colors.borderGold },
-  series: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.textMuted, marginTop: 10 },
-  description: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.parchmentDim, lineHeight: 26, fontStyle: 'italic' },
+  series: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.textMuted, marginTop: 10 },
+  description: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.parchmentDim, lineHeight: moderateScale(26), fontStyle: 'italic' },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  loadingText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.textMuted },
+  loadingText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.textMuted },
   sections: { gap: 4 },
   dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 15 },
   dividerLine: { flex: 1, height: 1, backgroundColor: theme.colors.border },
   diamond: { width: 5, height: 5, backgroundColor: theme.colors.gold, transform: [{ rotate: '45deg' }] },
-  dividerLabel: { fontFamily: theme.fonts.display, fontSize: 15, color: theme.colors.goldDim, letterSpacing: 2 },
+  dividerLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(15), color: theme.colors.goldDim, letterSpacing: 2 },
   completeBtn: { borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 6, paddingVertical: 13, alignItems: 'center', backgroundColor: theme.colors.background },
   completeBtnDone: { backgroundColor: theme.colors.green, borderColor: theme.colors.greenLight },
-  completeBtnText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.goldLight, fontWeight: 'bold', letterSpacing: 0.5 },
+  completeBtnText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.goldLight, fontWeight: 'bold', letterSpacing: 0.5 },
   completeBtnTextDone: { color: theme.colors.white },
 });
 
@@ -589,9 +515,9 @@ const qrStyles = StyleSheet.create({
   },
   checkMark: {
     color: '#fff',
-    fontSize: 13,
+    fontSize: moderateScale(13),
     fontWeight: 'bold',
-    lineHeight: 16,
+    lineHeight: moderateScale(16),
   },
   // Quest name area
   nameArea: {
@@ -599,7 +525,7 @@ const qrStyles = StyleSheet.create({
   },
   name: {
     fontFamily: theme.fonts.display,
-    fontSize: 19,
+    fontSize: moderateScale(19),
     color: theme.colors.parchment,
   },
   nameDone: {
@@ -607,12 +533,12 @@ const qrStyles = StyleSheet.create({
   },
   diff: {
     fontFamily: theme.fonts.display,
-    fontSize: 16,
+    fontSize: moderateScale(16),
     marginTop: 2,
   },
   qp: {
     fontFamily: theme.fonts.display,
-    fontSize: 16,
+    fontSize: moderateScale(16),
     color: theme.colors.goldLight,
     minWidth: 30,
     textAlign: 'right',
@@ -645,7 +571,7 @@ function FilterBar({ active, onChange }: { active: Filter; onChange: (f: Filter)
 const fbStyles = StyleSheet.create({
   chip: { marginTop: 10, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 3, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.panel },
   chipActive: { borderColor: theme.colors.borderGold, backgroundColor: theme.colors.panelLight },
-  text: { fontFamily: theme.fonts.display, fontSize: 14, color: theme.colors.parchmentDim },
+  text: { fontFamily: theme.fonts.display, fontSize: moderateScale(14), color: theme.colors.parchmentDim },
   textActive: { color: theme.colors.goldLight },
 });
 
@@ -829,25 +755,25 @@ const styles = StyleSheet.create({
 
   header: { alignItems: 'center', paddingTop: 10, paddingBottom: 6, marginBottom: 20, gap: 8 },
   backButton: { alignSelf: 'flex-start', paddingVertical: 4, paddingBottom: 10 },
-  backButtonText: { fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.gold, letterSpacing: 0.5 },
-  screenTitle: { fontFamily: theme.fonts.display, fontSize: 34, color: theme.colors.gold, letterSpacing: 1, textShadowColor: 'rgba(200,160,48,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12, includeFontPadding: false, lineHeight: 42 },
-  screenSubtitle: { fontFamily: theme.fonts.display, fontSize: 14, color: theme.colors.parchmentDim, fontStyle: 'italic', letterSpacing: 1, includeFontPadding: false },
+  backButtonText: { fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.gold, letterSpacing: 0.5 },
+  screenTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(34), color: theme.colors.gold, letterSpacing: 1, textShadowColor: 'rgba(200,160,48,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12, includeFontPadding: false, lineHeight: moderateScale(42) },
+  screenSubtitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(14), color: theme.colors.parchmentDim, fontStyle: 'italic', letterSpacing: 1, includeFontPadding: false },
   ornamentRow: { flexDirection: 'row', alignItems: 'center', width: '90%', gap: 6 },
   taglineRow: { flexDirection: 'row', alignItems: 'center', width: '90%', gap: 6 },
   ornamentLine: { flex: 1, height: 1, backgroundColor: theme.colors.border },
-  ornamentSymbol: { color: theme.colors.goldDim, fontSize: 10 },
-  ornamentLabel: { fontFamily: theme.fonts.display, fontSize: 11, color: theme.colors.goldDim, letterSpacing: 3, textTransform: 'uppercase', includeFontPadding: false },
+  ornamentSymbol: { color: theme.colors.goldDim, fontSize: moderateScale(10) },
+  ornamentLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(11), color: theme.colors.goldDim, letterSpacing: 3, textTransform: 'uppercase', includeFontPadding: false },
 
   section: { marginBottom: 20 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 20, marginTop: 5 },
   diamond: { width: 6, height: 6, backgroundColor: theme.colors.gold, transform: [{ rotate: '45deg' }], flexShrink: 0 },
-  sectionTitle: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.goldLight, letterSpacing: 2, textTransform: 'uppercase', includeFontPadding: false },
+  sectionTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.goldLight, letterSpacing: 2, textTransform: 'uppercase', includeFontPadding: false },
 
-  searchInput: { borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 3, backgroundColor: theme.colors.background, paddingHorizontal: 14, paddingVertical: 12, fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchment, marginBottom: 10 },
+  searchInput: { borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 3, backgroundColor: theme.colors.background, paddingHorizontal: 14, paddingVertical: 12, fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchment, marginBottom: 10 },
 
-  questCount: { fontFamily: theme.fonts.display, fontSize: 20, paddingTop: 5, paddingBottom: 10, color: theme.colors.textMuted, marginBottom: 6, letterSpacing: 1 },
+  questCount: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), paddingTop: 5, paddingBottom: 10, color: theme.colors.textMuted, marginBottom: 6, letterSpacing: 1 },
   questList: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, backgroundColor: theme.colors.panel, overflow: 'hidden' },
 
   backToCats: { marginBottom: 10 },
-  backToCatsText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.gold },
+  backToCatsText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.gold },
 });

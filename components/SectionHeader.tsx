@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { theme } from '../constants/theme';
+import { scale } from '../constants/responsive';
 
 export default function SectionHeader({ title }: { title: string }) {
   return (
@@ -17,9 +18,9 @@ container: {
   flexDirection: 'row',
   alignItems: 'center',
   justifyContent: 'center',
-  marginBottom: 10,
-  marginTop: 6,
-  paddingHorizontal: 4,
+  marginBottom: theme.spacing.md,
+  marginTop: scale(6),
+  paddingHorizontal: theme.spacing.xs,
 },
   line: {
     flex: 1,
@@ -31,11 +32,11 @@ container: {
     height: 5,
     backgroundColor: theme.colors.gold,
     transform: [{ rotate: '45deg' }],
-    marginHorizontal: 6,
+    marginHorizontal: scale(6),
   },
   title: {
     fontFamily: theme.fonts.display,
-    fontSize: 13,
+    fontSize: theme.fontSize.xs,
     color: theme.colors.goldLight,
     letterSpacing: 2,
     textTransform: 'uppercase',

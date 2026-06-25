@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Image, Linking, useWindowDimensions,
+  Image, Linking, useWindowDimensions, ImageSourcePropType,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import Svg, { Defs, Rect, RadialGradient, Stop } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { theme } from '../constants/theme';
+import { moderateScale, scale } from '../constants/responsive';
 
 // Money making categories
 
@@ -23,7 +24,7 @@ type Method = {
 
 type Category = {
   name:        string;
-  icon:        any;
+  icon:        ImageSourcePropType;
   description: string;
   wikiPage:    string;
   topMethods:  Method[];
@@ -159,13 +160,13 @@ function MethodCard({ method }: { method: Method }) {
 const mcStyles = StyleSheet.create({
   card: { backgroundColor: theme.colors.panel, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 4, padding: 12, marginBottom: 6, gap: 8 },
   top: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  name: { fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.parchment },
-  skills: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.textMuted, marginTop: 2 },
+  name: { fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.parchment },
+  skills: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.textMuted, marginTop: 2 },
   right: { alignItems: 'flex-end', gap: 4 },
-  gp: { fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.goldLight, paddingBottom: 2 },
+  gp: { fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.goldLight, paddingBottom: 2 },
   intensityTag: { borderWidth: 1, borderRadius: 3, paddingHorizontal: 8, paddingVertical: 3 },
-  intensityText: { fontFamily: theme.fonts.display, fontSize: 14 },
-  desc: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchmentDim, lineHeight: 27, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 8 },
+  intensityText: { fontFamily: theme.fonts.display, fontSize: moderateScale(14) },
+  desc: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchmentDim, lineHeight: moderateScale(27), borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 8 },
 });
 
 // Category section
@@ -198,13 +199,13 @@ function CategorySection({ cat, expanded, onToggle }:
 const csStyles = StyleSheet.create({
   wrapper: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 4, overflow: 'hidden', marginBottom: 8, backgroundColor: theme.colors.panel },
   header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14 },
-  icon: { width: 28, height: 28 },
-  name: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchment },
-  desc: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.textMuted, marginTop: 2, lineHeight: 23 },
-  chevron: { color: theme.colors.gold, fontSize: 20 },
+  icon: { width: scale(28), height: scale(28) },
+  name: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchment },
+  desc: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.textMuted, marginTop: 2, lineHeight: moderateScale(23) },
+  chevron: { color: theme.colors.gold, fontSize: moderateScale(20) },
   body: { backgroundColor: theme.colors.background, borderTopWidth: 1, borderTopColor: theme.colors.border, padding: 12, gap: 4 },
   wikiBtn: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, paddingVertical: 10, alignItems: 'center', marginTop: 6, backgroundColor: theme.colors.panel },
-  wikiBtnText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchmentDim },
+  wikiBtnText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchmentDim },
 });
 
 // Main screen
@@ -310,30 +311,30 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 40 },
   header: { alignItems: 'center', paddingTop: 10, paddingBottom: 6, marginBottom: 16, gap: 8 },
   backButton: { alignSelf: 'flex-start', paddingVertical: 4, paddingBottom: 10 },
-  backButtonText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.gold, letterSpacing: 0.5 },
-  screenTitle: { fontFamily: theme.fonts.display, fontSize: 34, color: theme.colors.gold, letterSpacing: 1, textShadowColor: 'rgba(200,160,48,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12, includeFontPadding: false, lineHeight: 42, textAlign: 'center' },
-  screenSubtitle: { fontFamily: theme.fonts.display, fontSize: 14, color: theme.colors.parchmentDim, fontStyle: 'italic', letterSpacing: 1, includeFontPadding: false },
+  backButtonText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.gold, letterSpacing: 0.5 },
+  screenTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(34), color: theme.colors.gold, letterSpacing: 1, textShadowColor: 'rgba(200,160,48,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12, includeFontPadding: false, lineHeight: moderateScale(42), textAlign: 'center' },
+  screenSubtitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(14), color: theme.colors.parchmentDim, fontStyle: 'italic', letterSpacing: 1, includeFontPadding: false },
   ornamentRow: { flexDirection: 'row', alignItems: 'center', width: '90%', gap: 6 },
   taglineRow: { flexDirection: 'row', alignItems: 'center', width: '90%', gap: 6 },
   ornamentLine: { flex: 1, height: 1, backgroundColor: theme.colors.border },
-  ornamentSymbol: { color: theme.colors.goldDim, fontSize: 10 },
-  ornamentLabel: { fontFamily: theme.fonts.display, fontSize: 11, color: theme.colors.goldDim, letterSpacing: 3, textTransform: 'uppercase', includeFontPadding: false },
+  ornamentSymbol: { color: theme.colors.goldDim, fontSize: moderateScale(10) },
+  ornamentLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(11), color: theme.colors.goldDim, letterSpacing: 3, textTransform: 'uppercase', includeFontPadding: false },
   legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 10, alignItems: 'center', justifyContent: 'center' },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   legendDot: { width: 12, height: 12, borderRadius: 4 },
-  legendText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchmentDark },
-  legendHint: { fontFamily: theme.fonts.display, fontSize: 15, color: theme.colors.textMuted, fontStyle: 'italic', textAlign: 'center', marginBottom: 15 },
+  legendText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchmentDark },
+  legendHint: { fontFamily: theme.fonts.display, fontSize: moderateScale(15), color: theme.colors.textMuted, fontStyle: 'italic', textAlign: 'center', marginBottom: 15 },
   section: { marginBottom: 20 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   diamond: { width: 6, height: 6, backgroundColor: theme.colors.gold, transform: [{ rotate: '45deg' }], flexShrink: 0 },
-  sectionTitle: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.goldLight, letterSpacing: 2, textTransform: 'uppercase', includeFontPadding: false },
-  liveDesc: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchmentDim, lineHeight: 30, marginBottom: 15, textAlign: 'center' },
+  sectionTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.goldLight, letterSpacing: 2, textTransform: 'uppercase', includeFontPadding: false },
+  liveDesc: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchmentDim, lineHeight: moderateScale(30), marginBottom: 15, textAlign: 'center' },
   liveButtons: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   liveToggleBtn: { flex: 1, borderWidth: 1, borderColor: theme.colors.borderGold, borderRadius: 3, paddingVertical: 11, alignItems: 'center', backgroundColor: theme.colors.panel },
   liveToggleBtnActive: { backgroundColor: theme.colors.panelLight },
-  liveToggleBtnText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.gold },
+  liveToggleBtnText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.gold },
   liveToggleBtnTextActive: { color: theme.colors.goldLight },
   wikiOpenBtn: { flex: 1, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, paddingVertical: 11, alignItems: 'center', backgroundColor: theme.colors.background },
-  wikiOpenBtnText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchmentDim },
+  wikiOpenBtnText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchmentDim },
   webviewWrapper: { borderRadius: 4, overflow: 'hidden', borderWidth: 1.5, borderColor: theme.colors.borderGold, marginTop: 4 },
 });

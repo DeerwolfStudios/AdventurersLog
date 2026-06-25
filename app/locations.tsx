@@ -8,6 +8,7 @@ import Svg, { Defs, Rect, RadialGradient, Stop } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { theme } from '../constants/theme';
+import { moderateScale, scale } from '../constants/responsive';
 
 // Region data
 
@@ -159,7 +160,7 @@ const REGIONS: Region[] = [
   {
     name: 'Kharidian Desert',
     description: 'A vast southern desert containing Pollnivneach, Nardah, and the pyramid of the Kharidian ancients.',
-    mapImage: 'https://oldschool.runescape.wiki/images/thumb/Kharidian_Desert_map.png/300px-Kharidian_Desert_map.png',
+    mapImage: 'https://oldschool.runescape.wiki/images/thumb/Kharidian_Desert.png/300px-Kharidian_Desert.png',
     locations: [
       { name: 'Al Kharid', sub: [
         { name: 'Al Kharid Mine' },
@@ -232,7 +233,7 @@ const REGIONS: Region[] = [
   {
     name: 'Karamja',
     description: 'A tropical island south of Misthalin, home to Brimhaven, Tai Bwo Wannai, and the TzHaar city.',
-    mapImage: 'https://oldschool.runescape.wiki/images/thumb/Karamja_map.png/300px-Karamja_map.png',
+    mapImage: 'https://oldschool.runescape.wiki/images/thumb/Karamja.png/300px-Karamja.png',
     locations: [
       { name: 'Brimhaven', sub: [
         { name: 'Brimhaven Agility Arena' },
@@ -355,12 +356,12 @@ function LocationRow({ loc, depth = 0 }: { loc: Location; depth?: number }) {
 
 const locStyles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 13, paddingRight: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.border, gap: 8 },
-  bullet: { fontSize: 20, color: theme.colors.parchmentDark, width: 12 },
+  bullet: { fontSize: moderateScale(20), color: theme.colors.parchmentDark, width: 12 },
   bulletPrimary: { color: theme.colors.gold },
-  name: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchmentDim, flex: 1 },
-  namePrimary: { fontSize: 20, color: theme.colors.parchment },
-  chevron: { color: theme.colors.gold, fontSize: 20 },
-  wikiLink: { fontFamily: theme.fonts.display, fontSize: 14, color: theme.colors.goldDim },
+  name: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchmentDim, flex: 1 },
+  namePrimary: { fontSize: moderateScale(20), color: theme.colors.parchment },
+  chevron: { color: theme.colors.gold, fontSize: moderateScale(20) },
+  wikiLink: { fontFamily: theme.fonts.display, fontSize: moderateScale(14), color: theme.colors.goldDim },
 });
 
 // Region card
@@ -410,13 +411,13 @@ function RegionCard({ region }: { region: Region }) {
 const regStyles = StyleSheet.create({
   card: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 4, overflow: 'hidden', marginBottom: 8, backgroundColor: theme.colors.panel },
   header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14 },
-  name: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.parchment, includeFontPadding: false },
-  desc: { fontFamily: theme.fonts.display, fontSize: 17, color: theme.colors.textMuted, marginTop: 5, lineHeight: 25 },
-  chevron: { color: theme.colors.gold, fontSize: 20, marginLeft: 4 },
+  name: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.parchment, includeFontPadding: false },
+  desc: { fontFamily: theme.fonts.display, fontSize: moderateScale(17), color: theme.colors.textMuted, marginTop: 5, lineHeight: moderateScale(25) },
+  chevron: { color: theme.colors.gold, fontSize: moderateScale(20), marginLeft: 4 },
   body: { backgroundColor: theme.colors.background, borderTopWidth: 1, borderTopColor: theme.colors.border },
-  mapImage: { width: '100%', height: 180, backgroundColor: theme.colors.background, padding: 10 },
+  mapImage: { width: '100%', height: scale(180), backgroundColor: theme.colors.background, padding: 10 },
   mapFallback: { padding: 16, alignItems: 'center', borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  mapFallbackText: { fontFamily: theme.fonts.display, fontSize: 17, color: theme.colors.gold },
+  mapFallbackText: { fontFamily: theme.fonts.display, fontSize: moderateScale(17), color: theme.colors.gold },
   locationList: { borderTopWidth: 1, borderTopColor: theme.colors.border },
 });
 
@@ -476,11 +477,11 @@ const mapStyles = StyleSheet.create({
   webviewWrapper: { borderRadius: 4, overflow: 'hidden', borderWidth: 1.5, borderColor: theme.colors.borderGold },
   webview: { flex: 1, backgroundColor: theme.colors.background },
   loadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: theme.colors.panel, alignItems: 'center', justifyContent: 'center' },
-  loadingText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchmentDim },
+  loadingText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchmentDim },
   expandBtn: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, paddingVertical: 15, alignItems: 'center', backgroundColor: theme.colors.panel },
-  expandBtnText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.gold },
+  expandBtnText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.gold },
   fullBtn: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, paddingVertical: 15, alignItems: 'center', backgroundColor: theme.colors.background },
-  fullBtnText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchmentDim },
+  fullBtnText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchmentDim },
 });
 
 // Main Screen
@@ -548,17 +549,17 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 40 },
   header: { alignItems: 'center', paddingTop: 10, paddingBottom: 6, marginBottom: 12, gap: 8 },
   backButton: { alignSelf: 'flex-start', paddingVertical: 4, paddingBottom: 10 },
-  backButtonText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.gold, letterSpacing: 0.5 },
-  screenTitle: { fontFamily: theme.fonts.display, fontSize: 34, color: theme.colors.gold, letterSpacing: 1, textShadowColor: 'rgba(200,160,48,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12, includeFontPadding: false, lineHeight: 42 },
-  screenSubtitle: { fontFamily: theme.fonts.display, fontSize: 14, color: theme.colors.parchmentDim, fontStyle: 'italic', letterSpacing: 1, includeFontPadding: false },
+  backButtonText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.gold, letterSpacing: 0.5 },
+  screenTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(34), color: theme.colors.gold, letterSpacing: 1, textShadowColor: 'rgba(200,160,48,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12, includeFontPadding: false, lineHeight: moderateScale(42) },
+  screenSubtitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(14), color: theme.colors.parchmentDim, fontStyle: 'italic', letterSpacing: 1, includeFontPadding: false },
   ornamentRow: { flexDirection: 'row', alignItems: 'center', width: '90%', gap: 6 },
   taglineRow: { flexDirection: 'row', alignItems: 'center', width: '90%', gap: 6 },
   ornamentLine: { flex: 1, height: 1, backgroundColor: theme.colors.border },
-  ornamentSymbol: { color: theme.colors.goldDim, fontSize: 10 },
-  ornamentLabel: { fontFamily: theme.fonts.display, fontSize: 11, color: theme.colors.goldDim, letterSpacing: 3, textTransform: 'uppercase', includeFontPadding: false },
+  ornamentSymbol: { color: theme.colors.goldDim, fontSize: moderateScale(10) },
+  ornamentLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(11), color: theme.colors.goldDim, letterSpacing: 3, textTransform: 'uppercase', includeFontPadding: false },
   section: { marginBottom: 20 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   diamond: { width: 6, height: 6, backgroundColor: theme.colors.gold, transform: [{ rotate: '45deg' }], flexShrink: 0 },
-  sectionTitle: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.goldLight, letterSpacing: 2, textTransform: 'uppercase', includeFontPadding: false },
-  hint: { fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.textMuted, marginBottom: 20, lineHeight: 30, textAlign: 'center' },
+  sectionTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.goldLight, letterSpacing: 2, textTransform: 'uppercase', includeFontPadding: false },
+  hint: { fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.textMuted, marginBottom: 20, lineHeight: moderateScale(30), textAlign: 'center' },
 });

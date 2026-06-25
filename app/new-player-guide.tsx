@@ -7,6 +7,7 @@ import Svg, { Defs, Rect, RadialGradient, Stop } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { theme } from '../constants/theme';
+import { moderateScale } from '../constants/responsive';
 
 // Guide content
 
@@ -314,14 +315,14 @@ const secStyles = StyleSheet.create({
   wrapper: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 4, overflow: 'hidden', marginBottom: 8 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, paddingHorizontal: 14, backgroundColor: theme.colors.panel },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  icon: { fontSize: 20 },
-  title: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.parchment, flex: 1 },
-  chevron: { color: theme.colors.gold, fontSize: 20 },
+  icon: { fontSize: moderateScale(20) },
+  title: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.parchment, flex: 1 },
+  chevron: { color: theme.colors.gold, fontSize: moderateScale(20) },
   body: { backgroundColor: theme.colors.background, padding: 14, gap: 0 },
   tip: { paddingBottom: 14, marginBottom: 14 },
   tipBorder: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  tipHeading: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.goldLight, marginBottom: 5, includeFontPadding: false },
-  tipBody: { fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.parchmentDim, lineHeight: 28 },
+  tipHeading: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.goldLight, marginBottom: 5, includeFontPadding: false },
+  tipBody: { fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.parchmentDim, lineHeight: moderateScale(28) },
 });
 
 // Main Screen
@@ -391,20 +392,20 @@ const styles = StyleSheet.create({
 
   header: { alignItems: 'center', paddingTop: 10, paddingBottom: 6, marginBottom: 12, gap: 8 },
   backButton: { alignSelf: 'flex-start', paddingVertical: 4, paddingBottom: 10 },
-  backButtonText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.gold, letterSpacing: 0.5 },
-  screenTitle: { fontFamily: theme.fonts.display, fontSize: 34, color: theme.colors.gold, letterSpacing: 1, textShadowColor: 'rgba(200,160,48,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12, includeFontPadding: false, lineHeight: 42, textAlign: 'center' },
-  screenSubtitle: { fontFamily: theme.fonts.display, fontSize: 14, color: theme.colors.parchmentDim, fontStyle: 'italic', letterSpacing: 1, includeFontPadding: false },
+  backButtonText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.gold, letterSpacing: 0.5 },
+  screenTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(34), color: theme.colors.gold, letterSpacing: 1, textShadowColor: 'rgba(200,160,48,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12, includeFontPadding: false, lineHeight: moderateScale(42), textAlign: 'center' },
+  screenSubtitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(14), color: theme.colors.parchmentDim, fontStyle: 'italic', letterSpacing: 1, includeFontPadding: false },
   ornamentRow: { flexDirection: 'row', alignItems: 'center', width: '90%', gap: 6 },
   taglineRow: { flexDirection: 'row', alignItems: 'center', width: '90%', gap: 6 },
   ornamentLine: { flex: 1, height: 1, backgroundColor: theme.colors.border },
-  ornamentSymbol: { color: theme.colors.goldDim, fontSize: 10 },
-  ornamentLabel: { fontFamily: theme.fonts.display, fontSize: 11, color: theme.colors.goldDim, letterSpacing: 3, textTransform: 'uppercase', includeFontPadding: false },
+  ornamentSymbol: { color: theme.colors.goldDim, fontSize: moderateScale(10) },
+  ornamentLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(11), color: theme.colors.goldDim, letterSpacing: 3, textTransform: 'uppercase', includeFontPadding: false },
 
   introBox: { backgroundColor: theme.colors.panel, borderWidth: 1, borderColor: theme.colors.borderGold, borderRadius: 4, padding: 14, marginBottom: 20 },
-  introText: { fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.parchmentDim, lineHeight: 27 },
+  introText: { fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.parchmentDim, lineHeight: moderateScale(27) },
 
   section: { marginBottom: 20 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 20 },
   diamond: { width: 6, height: 6, backgroundColor: theme.colors.gold, transform: [{ rotate: '45deg' }], flexShrink: 0 },
-  sectionTitle: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.goldLight, letterSpacing: 2, textTransform: 'uppercase', includeFontPadding: false },
+  sectionTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.goldLight, letterSpacing: 2, textTransform: 'uppercase', includeFontPadding: false },
 });

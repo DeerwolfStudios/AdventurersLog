@@ -8,6 +8,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { theme } from '../constants/theme';
+import { moderateScale, scale } from '../constants/responsive';
+import { StorageKeys } from '../constants/storage';
 
 // Types
 
@@ -624,38 +626,38 @@ function SkillDetailPanel({ skill, myLevel }: { skill: SkillName; myLevel?: numb
 const sdStyles = StyleSheet.create({
   container: { backgroundColor: theme.colors.panel, borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 4, padding: 14, gap: 10, marginTop: 10 },
   header: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
-  icon: { width: 44, height: 44 },
-  name: { fontFamily: theme.fonts.display, fontSize: 22, color: theme.colors.parchment, includeFontPadding: false },
+  icon: { width: scale(44), height: scale(44) },
+  name: { fontFamily: theme.fonts.display, fontSize: moderateScale(22), color: theme.colors.parchment, includeFontPadding: false },
   tagRow: { flexDirection: 'row', gap: 6, marginTop: 4, flexWrap: 'wrap' },
   tag: { borderWidth: 1, borderRadius: 3, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: theme.colors.background },
-  tagText: { fontFamily: theme.fonts.display, fontSize: 15, fontWeight: 'bold' },
+  tagText: { fontFamily: theme.fonts.display, fontSize: moderateScale(15), fontWeight: 'bold' },
   levelTag: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: theme.colors.panelLight },
-  levelTagText: { fontFamily: theme.fonts.display, fontSize: 15, color: theme.colors.parchmentDim },
-  levelBadge: { width: 48, height: 48, borderRadius: 4, backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.borderGold, alignItems: 'center', justifyContent: 'center' },
-  levelBadgeNum: { fontFamily: theme.fonts.display, fontSize: 24, color: theme.colors.goldLight, includeFontPadding: false },
+  levelTagText: { fontFamily: theme.fonts.display, fontSize: moderateScale(15), color: theme.colors.parchmentDim },
+  levelBadge: { width: scale(48), height: scale(48), borderRadius: 4, backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.borderGold, alignItems: 'center', justifyContent: 'center' },
+  levelBadgeNum: { fontFamily: theme.fonts.display, fontSize: moderateScale(24), color: theme.colors.goldLight, includeFontPadding: false },
   levelBadgeMaxed: { color: '#ffd700' },
-  description: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.parchmentDim, lineHeight: 30 },
+  description: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.parchmentDim, lineHeight: moderateScale(30) },
   xpBar: { height: 6, backgroundColor: theme.colors.background, borderRadius: 3, overflow: 'hidden', borderWidth: 1, borderColor: theme.colors.border },
   xpFill: { height: '100%', backgroundColor: theme.colors.gold, borderRadius: 3 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderTopWidth: 1, borderTopColor: theme.colors.border },
-  sectionTitle: { fontFamily: theme.fonts.display, fontSize: 14, color: theme.colors.gold, letterSpacing: 1, textTransform: 'uppercase' },
-  chevron: { color: theme.colors.gold, fontSize: 20 },
+  sectionTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(14), color: theme.colors.gold, letterSpacing: 1, textTransform: 'uppercase' },
+  chevron: { color: theme.colors.gold, fontSize: moderateScale(20) },
   milestones: { gap: 6 },
   milestoneRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
   milestoneReached: { opacity: 0.7 },
-  levelPill: { width: 34, height: 34, borderRadius: 10, backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },
+  levelPill: { width: scale(34), height: scale(34), borderRadius: 10, backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },
   levelPillReached: { backgroundColor: theme.colors.green, borderColor: theme.colors.greenLight },
-  levelPillText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchmentDark },
+  levelPillText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchmentDark },
   levelPillTextReached: { color: theme.colors.white },
-  milestoneText: { fontFamily: theme.fonts.display, fontSize: 17, color: theme.colors.parchment, flex: 1 },
+  milestoneText: { fontFamily: theme.fonts.display, fontSize: moderateScale(17), color: theme.colors.parchment, flex: 1 },
   milestoneTextReached: { color: theme.colors.parchmentDark, textDecorationLine: 'line-through' },
-  checkmark: { color: theme.colors.greenLight, fontSize: 14 },
+  checkmark: { color: theme.colors.greenLight, fontSize: moderateScale(14) },
   methods: { gap: 8 },
   methodRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', backgroundColor: theme.colors.background, borderRadius: 3, padding: 10, borderWidth: 1, borderColor: theme.colors.border },
   methodRange: { backgroundColor: theme.colors.panelLight, borderRadius: 3, paddingHorizontal: 8, marginTop: 5, paddingVertical: 4, minWidth: 50, alignItems: 'center' },
-  methodRangeText: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.goldLight },
-  methodName: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchment, paddingTop: 5 },
-  methodRate: { fontFamily: theme.fonts.display, fontSize: 17, paddingTop: 5, paddingBottom: 5, color: theme.colors.textMuted, marginTop: 2 },
+  methodRangeText: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.goldLight },
+  methodName: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchment, paddingTop: 5 },
+  methodRate: { fontFamily: theme.fonts.display, fontSize: moderateScale(17), paddingTop: 5, paddingBottom: 5, color: theme.colors.textMuted, marginTop: 2 },
 });
 
 // Skill Cell
@@ -687,7 +689,7 @@ export default function SkillsScreen() {
   const [selectedSkill, setSelectedSkill] = useState<SkillName | null>(null);
 
   useEffect(() => {
-    AsyncStorage.getItem('adventurers_log_characters').then((raw) => {
+    AsyncStorage.getItem(StorageKeys.characters).then((raw) => {
       if (raw) {
         try {
           const chars: Character[] = JSON.parse(raw);
@@ -823,45 +825,45 @@ const styles = StyleSheet.create({
 
   header: { alignItems: 'center', paddingTop: 10, paddingBottom: 6, marginBottom: 12, gap: 8 },
   backButton: { alignSelf: 'flex-start', paddingVertical: 4, paddingBottom: 10 },
-  backButtonText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.gold, letterSpacing: 0.5 },
-  screenTitle: { fontFamily: theme.fonts.display, fontSize: 34, color: theme.colors.gold, letterSpacing: 1, textShadowColor: 'rgba(200,160,48,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12, includeFontPadding: false, lineHeight: 42 },
-  screenSubtitle: { fontFamily: theme.fonts.display, fontSize: 14, color: theme.colors.parchmentDim, fontStyle: 'italic', letterSpacing: 1, includeFontPadding: false },
+  backButtonText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.gold, letterSpacing: 0.5 },
+  screenTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(34), color: theme.colors.gold, letterSpacing: 1, textShadowColor: 'rgba(200,160,48,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12, includeFontPadding: false, lineHeight: moderateScale(42) },
+  screenSubtitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(14), color: theme.colors.parchmentDim, fontStyle: 'italic', letterSpacing: 1, includeFontPadding: false },
   ornamentRow: { flexDirection: 'row', alignItems: 'center', width: '90%', gap: 6 },
   taglineRow: { flexDirection: 'row', alignItems: 'center', width: '90%', gap: 6 },
   ornamentLine: { flex: 1, height: 1, backgroundColor: theme.colors.border },
-  ornamentSymbol: { color: theme.colors.goldDim, fontSize: 10 },
-  ornamentLabel: { fontFamily: theme.fonts.display, fontSize: 11, color: theme.colors.goldDim, letterSpacing: 3, textTransform: 'uppercase', includeFontPadding: false },
+  ornamentSymbol: { color: theme.colors.goldDim, fontSize: moderateScale(10) },
+  ornamentLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(11), color: theme.colors.goldDim, letterSpacing: 3, textTransform: 'uppercase', includeFontPadding: false },
 
   charRow: { marginBottom: 14, gap: 6 },
-  charLabel: { fontFamily: theme.fonts.display, fontSize: 12, color: theme.colors.textMuted, letterSpacing: 1 },
+  charLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(12), color: theme.colors.textMuted, letterSpacing: 1 },
   charChip: { borderWidth: 1.5, borderColor: theme.colors.border, borderRadius: 3, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: theme.colors.panel },
   charChipActive: { borderColor: theme.colors.borderGold, backgroundColor: theme.colors.panelLight },
-  charChipText: { fontFamily: theme.fonts.display, fontSize: 13, color: theme.colors.parchmentDim },
+  charChipText: { fontFamily: theme.fonts.display, fontSize: moderateScale(13), color: theme.colors.parchmentDim },
   charChipTextActive: { color: theme.colors.goldLight },
 
   noCharBanner: { backgroundColor: theme.colors.panel, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 4, padding: 14, marginBottom: 16 },
-  noCharText: { fontFamily: theme.fonts.display, fontSize: 14, color: theme.colors.parchmentDim, lineHeight: 22 },
+  noCharText: { fontFamily: theme.fonts.display, fontSize: moderateScale(14), color: theme.colors.parchmentDim, lineHeight: moderateScale(22) },
 
   section: { marginBottom: 20 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10, paddingBottom: 0, marginTop: 5 },
   diamond: { width: 6, height: 6, backgroundColor: theme.colors.gold, transform: [{ rotate: '45deg' }], flexShrink: 0 },
-  sectionTitle: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.goldLight, letterSpacing: 2, textTransform: 'uppercase', includeFontPadding: false },
+  sectionTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.goldLight, letterSpacing: 2, textTransform: 'uppercase', includeFontPadding: false },
 
-  gridHint: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.textMuted, marginBottom: 20, textAlign: 'center', letterSpacing: 0.5 },
+  gridHint: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.textMuted, marginBottom: 20, textAlign: 'center', letterSpacing: 0.5 },
   skillsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8 },
   skillCell: { width: '30%', backgroundColor: theme.colors.panel, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 4, paddingVertical: 10, paddingHorizontal: 4, alignItems: 'center', gap: 4 },
   skillCellSelected: { borderColor: theme.colors.borderGold, backgroundColor: theme.colors.panelLight },
   skillCellMaxed: { borderColor: '#ffd700' },
-  skillIcon: { width: 30, height: 30 },
-  skillLevel: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.parchment, includeFontPadding: false },
+  skillIcon: { width: scale(30), height: scale(30) },
+  skillLevel: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.parchment, includeFontPadding: false },
   skillLevelMaxed: { color: '#ffd700' },
-  skillName: { fontFamily: theme.fonts.display, fontSize: 17, color: theme.colors.parchmentDark, textAlign: 'center', includeFontPadding: false },
+  skillName: { fontFamily: theme.fonts.display, fontSize: moderateScale(17), color: theme.colors.parchmentDark, textAlign: 'center', includeFontPadding: false },
 
   legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center', marginBottom: 10 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   legendDot: { width: 10, height: 10, borderRadius: 4 },
-  legendText: { fontFamily: theme.fonts.display, fontSize: 14, color: theme.colors.parchmentDark },
+  legendText: { fontFamily: theme.fonts.display, fontSize: moderateScale(14), color: theme.colors.parchmentDark },
 
   backToCats: { marginBottom: 10 },
-  backToCatsText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.gold },
+  backToCatsText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.gold },
 });
