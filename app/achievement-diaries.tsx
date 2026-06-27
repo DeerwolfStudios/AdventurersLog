@@ -9,10 +9,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { theme } from '../constants/theme';
+import { moderateScale, scale } from '../constants/responsive';
+import { StorageKeys } from '../constants/storage';
+import { fetchWikitext } from '../constants/wiki';
+import { WikiSection, cleanWikitext, parseSections, matchesSection, extractSection } from '../constants/wikitext';
 
-const WIKI_API    = 'https://oldschool.runescape.wiki/api.php';
-const UA          = 'AdventurersLog-App/1.0';
-const STORAGE_KEY = 'achievement_diaries_completed';
+const STORAGE_KEY = StorageKeys.diariesCompleted;
 
 // Diary data
 
@@ -220,109 +222,16 @@ function tierKey(diary: Diary, tier: Tier) { return `${diary.name}|${tier}`; }
 
 // Wiki API
 
-type WikiSection = { index: number; name: string };
-
 const DIARY_SECTIONS = ['easy', 'medium', 'hard', 'elite'];
 
-function extractWikitext(page: any): string {
-  return page?.revisions?.[0]?.slots?.main?.['*']
-    ?? page?.revisions?.[0]?.['*']
-    ?? '';
-}
+// Delegates to the shared wiki client (which caches and handles errors).
+const fetchDiaryWikitext = fetchWikitext;
 
-function cleanWikitext(raw: string): string {
-  return raw
-    // Remove templates {{...}}
-    .replace(/\{\{[^{}]*(?:\{\{[^{}]*\}\}[^{}]*)?\}\}/gs, '')
-    // Remove any remaining {{ or }}
-    .replace(/\{\{|\}\}/g, '')
-    // Clean wiki links [[link|text]] or [[link]]
-    .replace(/\[\[(?:[^\]|]+\|)?([^\]]+)\]\]/g, '$1')
-    // Remove any remaining [[ or ]]
-    .replace(/\[\[|\]\]/g, '')
-    // Remove external links [url text]
-    .replace(/\[https?:\/\/\S+\s([^\]]+)\]/g, '$1')
-    .replace(/\[https?:\/\/\S+\]/g, '')
-    // Remove bold/italic markup
-    .replace(/'{2,3}/g, '')
-    // Remove refs
-    .replace(/<ref[^>]*>[\s\S]*?<\/ref>/g, '')
-    .replace(/<ref[^>]*\/>/g, '')
-    // Remove HTML tags
-    .replace(/<[^>]+>/g, '')
-    // Remove tables
-    .replace(/\{\|[\s\S]*?\|\}/gs, '')
-    .replace(/^\s*[|!].*$/gm, '')
-    // Remove section headers ===...===
-    .replace(/^={2,6}\s*.+?\s*={2,6}\s*$/gm, '')
-    // Remove image/file markup (thumb, right|thumb|, File:, Image:)
-    .replace(/^(right|left|center|thumb|frame|frameless|\d+px)[|].*$/gm, '')
-    .replace(/^\[\[(File|Image):[^\]]*\]\]$/gm, '')
-    // Remove wiki list markers (* and #) and bold markers (**)
-    .replace(/^\*{1,3}\s*/gm, '')
-    .replace(/^#{1,3}\s*/gm, '')
-    // Remove : indentation markers
-    .replace(/^:+\s*/gm, '')
-    // Collapse excess blank lines
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
-const _wikitextCache: Record<string, string> = {};
-
-async function fetchDiaryWikitext(wikiPage: string): Promise<string> {
-  if (_wikitextCache[wikiPage]) return _wikitextCache[wikiPage];
-  try {
-    const url = `${WIKI_API}?action=query&prop=revisions&rvprop=content&rvslots=*&titles=${encodeURIComponent(wikiPage)}&format=json&origin=*`;
-    const res = await fetch(url, { headers: { 'User-Agent': UA } });
-    const data = await res.json();
-    const pages = data?.query?.pages ?? {};
-    const page = Object.values(pages)[0] as any;
-    const wikitext = extractWikitext(page);
-    _wikitextCache[wikiPage] = wikitext;
-    return wikitext;
-  } catch { return ''; }
-}
-
+// Diaries want only the top-level (level-2) tier sections, titled "<Tier> Rewards".
 function parseDiarySections(wikitext: string): WikiSection[] {
-  const sections: WikiSection[] = [];
-  const lines = wikitext.split('\n');
-  let index = 0;
-  for (const line of lines) {
-    const match = line.match(/^(={2,4})\s*([^=]+?)\s*\1\s*$/);
-    if (match) {
-      index++;
-      const name = match[2].trim();
-      const level = match[1].length;
-      if (level === 2 && DIARY_SECTIONS.some(s => name.toLowerCase().includes(s))) {
-        sections.push({ index, name: `${name} Rewards` });
-      }
-    }
-  }
-  return sections;
-}
-
-function extractSection(wikitext: string, targetIndex: number): string {
-  const lines = wikitext.split('\n');
-  let currentIndex = 0;
-  let inSection = false;
-  let sectionLevel = 2;
-  const out: string[] = [];
-  for (const line of lines) {
-    const match = line.match(/^(={2,4})\s*([^=]+?)\s*\1\s*$/);
-    if (match) {
-      currentIndex++;
-      // Only break if we hit another top-level (==) section
-      if (inSection && match[1].length <= sectionLevel) break;
-      if (currentIndex === targetIndex) {
-        inSection = true;
-        sectionLevel = match[1].length;
-        continue;
-      }
-    }
-    if (inSection) out.push(line);
-  }
-  return cleanWikitext(out.join('\n')) || 'No content available.';
+  return parseSections(wikitext)
+    .filter((s) => s.level === 2 && matchesSection(s, DIARY_SECTIONS))
+    .map((s) => ({ ...s, title: `${s.title} Rewards` }));
 }
 
 //  Background
@@ -354,8 +263,6 @@ function ProgressPanel({ completedCount, totalTiers }:
   const barW = width - 64;
   const pct = completedCount / totalTiers;
 
-  const easyDone  = completedCount >= DIARIES.length ? DIARIES.length : Math.min(completedCount, DIARIES.length);
-
   return (
     <View style={pbStyles.container}>
       <View style={pbStyles.row}>
@@ -367,12 +274,9 @@ function ProgressPanel({ completedCount, totalTiers }:
       </View>
       <View style={pbStyles.tierRow}>
         {(['Easy', 'Medium', 'Hard', 'Elite'] as Tier[]).map(tier => {
-          const count = DIARIES.filter(d =>
-            completedCount > 0 // placeholder — actual count from parent
-          ).length;
           return (
             <View key={tier} style={[pbStyles.tierBadge, { borderColor: TIER_COLORS[tier] }]}>
-              <Text style={[pbStyles.tierText, { color: TIER_COLORS[tier] }]}>{tier}</Text>
+              <Text style={[pbStyles.tierText, { color: TIER_COLORS[tier] }]} numberOfLines={1} adjustsFontSizeToFit>{tier}</Text>
             </View>
           );
         })}
@@ -384,13 +288,15 @@ function ProgressPanel({ completedCount, totalTiers }:
 const pbStyles = StyleSheet.create({
   container: { backgroundColor: theme.colors.panel, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 4, padding: 14, gap: 10 },
   row: { flexDirection: 'row', justifyContent: 'space-between' },
-  label: { fontFamily: theme.fonts.display, fontSize: 13, color: theme.colors.parchmentDark, letterSpacing: 1, textTransform: 'uppercase', paddingTop: 2 },
-  value: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.goldLight },
+  label: { fontFamily: theme.fonts.display, fontSize: moderateScale(13), color: theme.colors.parchmentDark, letterSpacing: 1, textTransform: 'uppercase', paddingTop: 2 },
+  value: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.goldLight },
   track: { height: 8, backgroundColor: theme.colors.background, borderRadius: 4, overflow: 'hidden', borderWidth: 1, borderColor: theme.colors.border },
   fill: { height: '100%', backgroundColor: theme.colors.gold, borderRadius: 4 },
   tierRow: { flexDirection: 'row', gap: 8, marginTop: 5, marginBottom: 5 },
-  tierBadge: { borderWidth: 1, borderRadius: 3, paddingHorizontal: 20, paddingVertical: 6 },
-  tierText: { fontFamily: theme.fonts.display, fontSize: 18, fontWeight: 'bold' },
+  // flex:1 so the four badges share the row width evenly and never overflow the
+  // right edge (previously fixed paddingHorizontal pushed "Elite" off-screen).
+  tierBadge: { flex: 1, borderWidth: 1, borderRadius: 3, paddingHorizontal: 8, paddingVertical: 6, alignItems: 'center' },
+  tierText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), fontWeight: 'bold' },
 });
 
 // Expandable wiki section
@@ -405,7 +311,7 @@ function ExpandableSection({ title, wikiPage, sectionIndex }:
     if (!expanded && content === null) {
       setLoading(true);
       const wikitext = await fetchDiaryWikitext(wikiPage);
-      setContent(extractSection(wikitext, sectionIndex));
+      setContent(cleanWikitext(extractSection(wikitext, sectionIndex)) || 'No content available.');
       setLoading(false);
     }
     setExpanded(v => !v);
@@ -431,10 +337,10 @@ function ExpandableSection({ title, wikiPage, sectionIndex }:
 const secStyles = StyleSheet.create({
   container: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, overflow: 'hidden', marginBottom: 4 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 11, paddingHorizontal: 12, backgroundColor: theme.colors.panelLight },
-  title: { fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.parchment, flex: 1 },
-  chevron: { color: theme.colors.gold, fontSize: 20, marginLeft: 8 },
+  title: { fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.parchment, flex: 1 },
+  chevron: { color: theme.colors.gold, fontSize: moderateScale(20), marginLeft: 8 },
   body: { backgroundColor: theme.colors.background, padding: 12 },
-  content: { fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.parchmentDim, lineHeight: 26 },
+  content: { fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.parchmentDim, lineHeight: moderateScale(26) },
 });
 
 // Diary Detail Panel
@@ -524,7 +430,7 @@ function DiaryDetailPanel({ diary, completedTiers, onToggleTier }: DiaryDetailPr
           {sections.map(s => (
             <ExpandableSection
               key={s.index}
-              title={s.name}
+              title={s.title}
               wikiPage={diary.wikiPage}
               sectionIndex={s.index}
             />
@@ -538,28 +444,28 @@ function DiaryDetailPanel({ diary, completedTiers, onToggleTier }: DiaryDetailPr
 const ddStyles = StyleSheet.create({
   container: { backgroundColor: theme.colors.panel, borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 4, padding: 14, gap: 14 },
   header: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
-  icon: { width: 36, height: 36, marginTop: 2 },
-  name: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.parchment, includeFontPadding: false },
-  area: { fontFamily: theme.fonts.display, fontSize: 16, color: theme.colors.textMuted, marginTop: 2 },
-  taskmaster: { fontFamily: theme.fonts.display, fontSize: 17, color: theme.colors.parchmentDark, marginTop: 2 },
+  icon: { width: scale(36), height: scale(36), marginTop: 2 },
+  name: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.parchment, includeFontPadding: false },
+  area: { fontFamily: theme.fonts.display, fontSize: moderateScale(16), color: theme.colors.textMuted, marginTop: 2 },
+  taskmaster: { fontFamily: theme.fonts.display, fontSize: moderateScale(17), color: theme.colors.parchmentDark, marginTop: 2 },
   tiersContainer: { gap: 8 },
   tierCard: { backgroundColor: theme.colors.background, borderWidth: 1, borderRadius: 4, padding: 12, gap: 8 },
   tierCardTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   tierBadge: { borderWidth: 1, borderRadius: 3, paddingHorizontal: 8, paddingVertical: 5 },
-  tierBadgeText: { fontFamily: theme.fonts.display, fontSize: 16, fontWeight: 'bold' },
-  tierTasks: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchmentDark },
-  tierTopSkill: { fontFamily: theme.fonts.display, fontSize: 16, color: theme.colors.textMuted, flex: 1, textAlign: 'right' },
-  tierReward: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.parchmentDim, lineHeight: 28 },
+  tierBadgeText: { fontFamily: theme.fonts.display, fontSize: moderateScale(16), fontWeight: 'bold' },
+  tierTasks: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchmentDark },
+  tierTopSkill: { fontFamily: theme.fonts.display, fontSize: moderateScale(16), color: theme.colors.textMuted, flex: 1, textAlign: 'right' },
+  tierReward: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.parchmentDim, lineHeight: moderateScale(28) },
   tierBtn: { borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 4, paddingVertical: 10, alignItems: 'center', backgroundColor: theme.colors.panel },
   tierBtnDone: { backgroundColor: theme.colors.green, borderColor: theme.colors.greenLight },
-  tierBtnText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.goldLight, fontWeight: 'bold' },
+  tierBtnText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.goldLight, fontWeight: 'bold' },
   tierBtnTextDone: { color: theme.colors.white },
   sectionsDivider: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   dividerLine: { flex: 1, height: 1, backgroundColor: theme.colors.border },
   diamond: { width: 5, height: 5, backgroundColor: theme.colors.gold, transform: [{ rotate: '45deg' }] },
-  dividerLabel: { fontFamily: theme.fonts.display, fontSize: 15, color: theme.colors.goldDim, letterSpacing: 2 },
+  dividerLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(15), color: theme.colors.goldDim, letterSpacing: 2 },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  loadingText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.textMuted },
+  loadingText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.textMuted },
 });
 
 // Diary row
@@ -596,14 +502,14 @@ function DiaryRow({ diary, completedTiers, onPress, selected }:
 const drStyles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.border, gap: 10 },
   rowSelected: { backgroundColor: theme.colors.panelLight },
-  name: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchment, marginBottom: 6 },
+  name: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchment, marginBottom: 6 },
   nameDone: { color: theme.colors.parchmentDark },
   tierPips: { flexDirection: 'row', gap: 4 },
-  pip: { width: 22, height: 18, borderRadius: 3, alignItems: 'center', justifyContent: 'center' },
-  pipText: { fontFamily: theme.fonts.display, fontSize: 12, color: theme.colors.white, fontWeight: 'bold' },
+  pip: { width: scale(22), height: scale(18), borderRadius: 3, alignItems: 'center', justifyContent: 'center' },
+  pipText: { fontFamily: theme.fonts.display, fontSize: moderateScale(12), color: theme.colors.white, fontWeight: 'bold' },
   right: { alignItems: 'flex-end', gap: 4 },
-  progress: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.goldLight },
-  area: { fontFamily: theme.fonts.display, fontSize: 16, color: theme.colors.textMuted },
+  progress: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.goldLight },
+  area: { fontFamily: theme.fonts.display, fontSize: moderateScale(16), color: theme.colors.textMuted },
 });
 
 // Filter bar
@@ -613,7 +519,8 @@ type DiaryFilter = 'All' | 'Easy' | 'Medium' | 'Hard' | 'Elite' | 'Complete' | '
 function FilterBar({ active, onChange }: { active: DiaryFilter; onChange: (f: DiaryFilter) => void }) {
   const filters: DiaryFilter[] = ['All', 'Easy', 'Medium', 'Hard', 'Elite', 'Complete', 'Incomplete'];
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}
+      contentContainerStyle={{ paddingRight: 16 }}>
       <View style={{ flexDirection: 'row', gap: 6 }}>
         {filters.map(f => (
           <TouchableOpacity
@@ -638,7 +545,7 @@ function FilterBar({ active, onChange }: { active: DiaryFilter; onChange: (f: Di
 const fbStyles = StyleSheet.create({
   chip: { marginTop: 10, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 3, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.panel },
   chipActive: { borderColor: theme.colors.borderGold, backgroundColor: theme.colors.panelLight },
-  text: { fontFamily: theme.fonts.display, fontSize: 15, color: theme.colors.parchmentDim },
+  text: { fontFamily: theme.fonts.display, fontSize: moderateScale(15), color: theme.colors.parchmentDim },
   textActive: { color: theme.colors.goldLight },
 });
 
@@ -794,24 +701,24 @@ const styles = StyleSheet.create({
 
   header: { alignItems: 'center', paddingTop: 10, paddingBottom: 6, marginBottom: 20, gap: 8 },
   backButton: { alignSelf: 'flex-start', paddingVertical: 4, paddingBottom: 10 },
-  backButtonText: { fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.gold, letterSpacing: 0.5 },
-  screenTitle: { fontFamily: theme.fonts.display, fontSize: 34, color: theme.colors.gold, letterSpacing: 1, textShadowColor: 'rgba(200,160,48,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12, includeFontPadding: false, lineHeight: 42, textAlign: 'center' },
-  screenSubtitle: { fontFamily: theme.fonts.display, fontSize: 14, color: theme.colors.parchmentDim, fontStyle: 'italic', letterSpacing: 1, includeFontPadding: false },
+  backButtonText: { fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.gold, letterSpacing: 0.5 },
+  screenTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(34), color: theme.colors.gold, letterSpacing: 1, textShadowColor: 'rgba(200,160,48,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12, includeFontPadding: false, lineHeight: moderateScale(42), textAlign: 'center' },
+  screenSubtitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(14), color: theme.colors.parchmentDim, fontStyle: 'italic', letterSpacing: 1, includeFontPadding: false },
   ornamentRow: { flexDirection: 'row', alignItems: 'center', width: '90%', gap: 6 },
   taglineRow: { flexDirection: 'row', alignItems: 'center', width: '90%', gap: 6 },
   ornamentLine: { flex: 1, height: 1, backgroundColor: theme.colors.border },
-  ornamentSymbol: { color: theme.colors.goldDim, fontSize: 10 },
-  ornamentLabel: { fontFamily: theme.fonts.display, fontSize: 11, color: theme.colors.goldDim, letterSpacing: 3, textTransform: 'uppercase', includeFontPadding: false },
+  ornamentSymbol: { color: theme.colors.goldDim, fontSize: moderateScale(10) },
+  ornamentLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(11), color: theme.colors.goldDim, letterSpacing: 3, textTransform: 'uppercase', includeFontPadding: false },
 
   section: { marginBottom: 20 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   diamond: { width: 6, height: 6, backgroundColor: theme.colors.gold, transform: [{ rotate: '45deg' }], flexShrink: 0 },
-  sectionTitle: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.goldLight, letterSpacing: 2, textTransform: 'uppercase', includeFontPadding: false },
+  sectionTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.goldLight, letterSpacing: 2, textTransform: 'uppercase', includeFontPadding: false },
 
-  searchInput: { borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 3, backgroundColor: theme.colors.background, paddingHorizontal: 14, paddingVertical: 12, fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchment, marginBottom: 4 },
-  count: { fontFamily: theme.fonts.display, fontSize: 13, color: theme.colors.textMuted, marginBottom: 6, letterSpacing: 1, paddingTop: 10 },
+  searchInput: { borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 3, backgroundColor: theme.colors.background, paddingHorizontal: 14, paddingVertical: 12, fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchment, marginBottom: 4 },
+  count: { fontFamily: theme.fonts.display, fontSize: moderateScale(13), color: theme.colors.textMuted, marginBottom: 6, letterSpacing: 1, paddingTop: 10 },
   diaryList: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, backgroundColor: theme.colors.panel, overflow: 'hidden' },
 
   backToCats: { marginBottom: 10 },
-  backToCatsText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.gold },
+  backToCatsText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.gold },
 });

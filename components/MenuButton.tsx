@@ -10,6 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { theme } from '../constants/theme';
+import { scale, moderateScale } from '../constants/responsive';
 
 interface MenuButtonProps {
   icon?: ImageSourcePropType;
@@ -68,12 +69,14 @@ export default function MenuButton({ icon, emoji, label, onPress }: MenuButtonPr
 
 const labelStyle = {
   fontFamily: theme.fonts.display,
-  fontSize: Platform.OS === 'android' ? 8 : 11,
+  // Preserve the Android/iOS delta (font-rendering workaround for IMFellEnglish on
+  // Android) and route it through the scale rather than collapsing to one value.
+  fontSize: moderateScale(Platform.OS === 'android' ? 8 : 11),
   color: theme.colors.parchment,
   textAlign: 'center' as const,
   letterSpacing: 2,
   textTransform: 'uppercase' as const,
-  lineHeight: 16,
+  lineHeight: moderateScale(16),
   textShadowColor: 'rgba(0,0,0,0.8)',
   textShadowOffset: { width: 0, height: 1 },
   textShadowRadius: 2,
@@ -97,21 +100,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   inner: {
-    paddingVertical: 14,
-    paddingHorizontal: 10,
+    paddingVertical: scale(14),
+    paddingHorizontal: scale(10),
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 88,
+    minHeight: scale(88),
     position: 'relative',
   },
   icon: {
-    width: 36,
-    height: 36,
-    marginBottom: 8,
+    width: scale(36),
+    height: scale(36),
+    marginBottom: scale(8),
   },
   emoji: {
-    fontSize: 28,
-    marginBottom: 7,
+    fontSize: moderateScale(28),
+    marginBottom: scale(7),
   },
   corner: {
     position: 'absolute',

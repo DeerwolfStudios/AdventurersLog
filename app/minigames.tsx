@@ -8,6 +8,9 @@ import Svg, { Defs, Rect, RadialGradient, Stop } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { theme } from '../constants/theme';
+import { moderateScale, scale } from '../constants/responsive';
+import { fetchWikitext } from '../constants/wiki';
+import { WikiSection, cleanWikitext, parseSections, matchesSection, extractSection } from '../constants/wikitext';
 
 type MinigameType = 'Combat' | 'Skilling' | 'Combat & Skilling' | 'Miscellaneous';
 type Safety = 'Safe' | 'Dangerous' | 'Non-combat';
@@ -157,99 +160,14 @@ const SAFETY_COLORS: Record<Safety, string> = {
   'Non-combat': '#4a90d9',
 };
 
-// Wiki API 
-
-const WIKI_API = 'https://oldschool.runescape.wiki/api.php';
-const UA = 'AdventurersLog-App/1.0';
-const _cache: Record<string, string> = {};
-
-function extractWikitext(page: any): string {
-  return page?.revisions?.[0]?.slots?.main?.['*'] ?? page?.revisions?.[0]?.['*'] ?? '';
-}
-
-function cleanWikitext(raw: string): string {
-  return raw
-    // Remove templates {{...}}
-    .replace(/\{\{[^{}]*(?:\{\{[^{}]*\}\}[^{}]*)?\}\}/gs, '')
-    // Remove any remaining {{ or }}
-    .replace(/\{\{|\}\}/g, '')
-    // Clean wiki links [[link|text]] or [[link]]
-    .replace(/\[\[(?:[^\]|]+\|)?([^\]]+)\]\]/g, '$1')
-    // Remove any remaining [[ or ]]
-    .replace(/\[\[|\]\]/g, '')
-    // Remove external links [url text]
-    .replace(/\[https?:\/\/\S+\s([^\]]+)\]/g, '$1')
-    .replace(/\[https?:\/\/\S+\]/g, '')
-    // Remove bold/italic markup
-    .replace(/'{2,3}/g, '')
-    // Remove refs
-    .replace(/<ref[^>]*>[\s\S]*?<\/ref>/g, '')
-    .replace(/<ref[^>]*\/>/g, '')
-    // Remove HTML tags
-    .replace(/<[^>]+>/g, '')
-    // Remove tables
-    .replace(/\{\|[\s\S]*?\|\}/gs, '')
-    .replace(/^\s*[|!].*$/gm, '')
-    // Remove section headers ===...===
-    .replace(/^={2,6}\s*.+?\s*={2,6}\s*$/gm, '')
-    // Remove image/file markup (thumb, right|thumb|, File:, Image:)
-    .replace(/^(right|left|center|thumb|frame|frameless|\d+px)[|].*$/gm, '')
-    .replace(/^\[\[(File|Image):[^\]]*\]\]$/gm, '')
-    // Remove wiki list markers (* and #) and bold markers (**)
-    .replace(/^\*{1,3}\s*/gm, '')
-    .replace(/^#{1,3}\s*/gm, '')
-    // Remove : indentation markers
-    .replace(/^:+\s*/gm, '')
-    // Collapse excess blank lines
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
-type WikiSection = { index: number; name: string };
-
-async function fetchSections(wikiPage: string): Promise<{ wikitext: string; sections: WikiSection[] }> {
-  if (_cache[wikiPage]) {
-    const wikitext = _cache[wikiPage];
-    return { wikitext, sections: parseSections(wikitext) };
-  }
-  try {
-    const url = `${WIKI_API}?action=query&prop=revisions&rvprop=content&rvslots=*&titles=${encodeURIComponent(wikiPage)}&format=json&origin=*`;
-    const res = await fetch(url, { headers: { 'User-Agent': UA } });
-    const data = await res.json();
-    const pages = data?.query?.pages ?? {};
-    const page = Object.values(pages)[0] as any;
-    const wikitext = extractWikitext(page);
-    _cache[wikiPage] = wikitext;
-    return { wikitext, sections: parseSections(wikitext) };
-  } catch { return { wikitext: '', sections: [] }; }
-}
+// Wiki API
 
 const WANTED = ['reward', 'getting', 'strateg', 'how to', 'gameplay', 'overview', 'mechanics', 'points', 'role'];
 
-function parseSections(wikitext: string): WikiSection[] {
-  const out: WikiSection[] = [];
-  let i = 0;
-  for (const line of wikitext.split('\n')) {
-    const m = line.match(/^(={2,4})\s*([^=]+?)\s*\1\s*$/);
-    if (m) { i++; if (WANTED.some(w => m[2].toLowerCase().includes(w))) out.push({ index: i, name: m[2].trim() }); }
-  }
-  return out;
-}
-
-function extractSection(wikitext: string, targetIndex: number): string {
-  const lines = wikitext.split('\n');
-  let cur = 0, inSec = false, level = 2;
-  const out: string[] = [];
-  for (const line of lines) {
-    const m = line.match(/^(={2,4})\s*([^=]+?)\s*\1\s*$/);
-    if (m) {
-      cur++;
-      if (inSec && m[1].length <= level) break;
-      if (cur === targetIndex) { inSec = true; level = m[1].length; continue; }
-    }
-    if (inSec) out.push(line);
-  }
-  return cleanWikitext(out.join('\n')) || 'No content available.';
+async function fetchSections(wikiPage: string): Promise<{ wikitext: string; sections: WikiSection[] }> {
+  const wikitext = await fetchWikitext(wikiPage);
+  const sections = parseSections(wikitext).filter((s) => matchesSection(s, WANTED));
+  return { wikitext, sections };
 }
 
 // Background 
@@ -284,7 +202,7 @@ function WikiRow({ wikiPage, section }: { wikiPage: string; section: WikiSection
     if (!expanded && content === null) {
       setLoading(true);
       const { wikitext } = await fetchSections(wikiPage);
-      setContent(extractSection(wikitext, section.index));
+      setContent(cleanWikitext(extractSection(wikitext, section.index)) || 'No content available.');
       setLoading(false);
     }
     setExpanded(v => !v);
@@ -293,7 +211,7 @@ function WikiRow({ wikiPage, section }: { wikiPage: string; section: WikiSection
   return (
     <View style={wsStyles.wrapper}>
       <TouchableOpacity style={wsStyles.header} onPress={toggle}>
-        <Text style={wsStyles.title}>{section.name}</Text>
+        <Text style={wsStyles.title}>{section.title}</Text>
         {loading ? <ActivityIndicator color={theme.colors.gold} size="small" /> : <Text style={wsStyles.chevron}>{expanded ? '▾' : '▸'}</Text>}
       </TouchableOpacity>
       {expanded && content !== null && (
@@ -306,10 +224,10 @@ function WikiRow({ wikiPage, section }: { wikiPage: string; section: WikiSection
 const wsStyles = StyleSheet.create({
   wrapper: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, overflow: 'hidden', marginBottom: 4 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 11, paddingHorizontal: 12, backgroundColor: theme.colors.panelLight },
-  title: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchment, flex: 1 },
-  chevron: { color: theme.colors.gold, fontSize: 20, marginLeft: 8 },
+  title: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchment, flex: 1 },
+  chevron: { color: theme.colors.gold, fontSize: moderateScale(20), marginLeft: 8 },
   body: { backgroundColor: theme.colors.background, padding: 12 },
-  content: { fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.parchmentDim, lineHeight: 30 },
+  content: { fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.parchmentDim, lineHeight: moderateScale(30) },
 });
 
 // Minigame detail 
@@ -384,27 +302,27 @@ function MinigameDetail({ mg }: { mg: Minigame }) {
 const mdStyles = StyleSheet.create({
   container: { backgroundColor: theme.colors.panel, borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 4, padding: 14, marginTop: 10, gap: 12 },
   header: { flexDirection: 'row', gap: 10 },
-  name: { fontFamily: theme.fonts.display, fontSize: 25, paddingBottom: 10, color: theme.colors.parchment, includeFontPadding: false },
+  name: { fontFamily: theme.fonts.display, fontSize: moderateScale(25), paddingBottom: 10, color: theme.colors.parchment, includeFontPadding: false },
   tagRow: { flexDirection: 'row', gap: 6, marginTop: 6, flexWrap: 'wrap' },
   tag: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: theme.colors.background },
-  tagText: { fontFamily: theme.fonts.display, fontSize: 16, color: theme.colors.parchmentDim },
+  tagText: { fontFamily: theme.fonts.display, fontSize: moderateScale(16), color: theme.colors.parchmentDim },
   infoRow: { gap: 3 },
   infoLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, },
-  compassIcon: { width: 30, height: 30 },
-  infoLabel: { fontFamily: theme.fonts.display, fontSize: 21, paddingBottom: 10, paddingTop: 10, color: theme.colors.gold, letterSpacing: 1 },
-  infoValue: { paddingTop: 10, fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.parchment, lineHeight: 20 },
-  description: { fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.parchmentDim, lineHeight: 29 },
+  compassIcon: { width: scale(30), height: scale(30) },
+  infoLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(21), paddingBottom: 10, paddingTop: 10, color: theme.colors.gold, letterSpacing: 1 },
+  infoValue: { paddingTop: 10, fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.parchment, lineHeight: moderateScale(20) },
+  description: { fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.parchmentDim, lineHeight: moderateScale(29) },
   rewardBox: { backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, padding: 10, gap: 4 },
-  rewardLabel: { fontFamily: theme.fonts.display, fontSize: 16, color: theme.colors.goldLight, letterSpacing: 1, textTransform: 'uppercase' },
-  rewardText: { fontFamily: theme.fonts.display, fontSize: 17, color: theme.colors.parchmentDim, lineHeight: 27 },
+  rewardLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(16), color: theme.colors.goldLight, letterSpacing: 1, textTransform: 'uppercase' },
+  rewardText: { fontFamily: theme.fonts.display, fontSize: moderateScale(17), color: theme.colors.parchmentDim, lineHeight: moderateScale(27) },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  loadingText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.textMuted },
+  loadingText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.textMuted },
   divider: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   divLine: { flex: 1, height: 1, backgroundColor: theme.colors.border },
   diamond: { width: 5, height: 5, backgroundColor: theme.colors.gold, transform: [{ rotate: '45deg' }] },
-  divLabel: { fontFamily: theme.fonts.display, fontSize: 15, color: theme.colors.goldDim, letterSpacing: 2 },
+  divLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(15), color: theme.colors.goldDim, letterSpacing: 2 },
   wikiBtn: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, paddingVertical: 10, alignItems: 'center' },
-  wikiBtnText: { fontFamily: theme.fonts.display, fontSize: 17, color: theme.colors.parchmentDim },
+  wikiBtnText: { fontFamily: theme.fonts.display, fontSize: moderateScale(17), color: theme.colors.parchmentDim },
 });
 
 // Minigame row
@@ -427,11 +345,11 @@ function MinigameRow({ mg, selected, onPress }: { mg: Minigame; selected: boolea
 const mrStyles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.border, gap: 10 },
   rowSelected: { backgroundColor: theme.colors.panelLight },
-  name: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.parchment },
-  type: { fontFamily: theme.fonts.display, fontSize: 16, marginTop: 2 },
+  name: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.parchment },
+  type: { fontFamily: theme.fonts.display, fontSize: moderateScale(16), marginTop: 2 },
   right: { alignItems: 'flex-end', gap: 3 },
-  safety: { fontFamily: theme.fonts.display, fontSize: 16 },
-  members: { fontFamily: theme.fonts.display, fontSize: 16, color: theme.colors.textMuted },
+  safety: { fontFamily: theme.fonts.display, fontSize: moderateScale(16) },
+  members: { fontFamily: theme.fonts.display, fontSize: moderateScale(16), color: theme.colors.textMuted },
 });
 
 // Filter bar
@@ -456,7 +374,7 @@ function FilterBar({ active, onChange }: { active: MGFilter; onChange: (f: MGFil
 const fbStyles = StyleSheet.create({
   chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 3, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.panel },
   chipActive: { borderColor: theme.colors.borderGold, backgroundColor: theme.colors.panelLight },
-  text: { fontFamily: theme.fonts.display, fontSize: 16, color: theme.colors.parchmentDim },
+  text: { fontFamily: theme.fonts.display, fontSize: moderateScale(16), color: theme.colors.parchmentDim },
   textActive: { color: theme.colors.goldLight },
 });
 
@@ -542,21 +460,21 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 40 },
   header: { alignItems: 'center', paddingTop: 10, paddingBottom: 6, marginBottom: 12, gap: 8 },
   backButton: { alignSelf: 'flex-start', paddingVertical: 4, paddingBottom: 10 },
-  backButtonText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.gold, letterSpacing: 0.5 },
-  screenTitle: { fontFamily: theme.fonts.display, fontSize: 34, color: theme.colors.gold, letterSpacing: 1, textShadowColor: 'rgba(200,160,48,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12, includeFontPadding: false, lineHeight: 42 },
-  screenSubtitle: { fontFamily: theme.fonts.display, fontSize: 14, color: theme.colors.parchmentDim, fontStyle: 'italic', letterSpacing: 1, includeFontPadding: false },
+  backButtonText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.gold, letterSpacing: 0.5 },
+  screenTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(34), color: theme.colors.gold, letterSpacing: 1, textShadowColor: 'rgba(200,160,48,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12, includeFontPadding: false, lineHeight: moderateScale(42) },
+  screenSubtitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(14), color: theme.colors.parchmentDim, fontStyle: 'italic', letterSpacing: 1, includeFontPadding: false },
   ornamentRow: { flexDirection: 'row', alignItems: 'center', width: '90%', gap: 6 },
   taglineRow: { marginBottom: 10, flexDirection: 'row', alignItems: 'center', width: '90%', gap: 6 },
   ornamentLine: { flex: 1, height: 1, backgroundColor: theme.colors.border },
-  ornamentSymbol: { color: theme.colors.goldDim, fontSize: 10 },
-  ornamentLabel: { fontFamily: theme.fonts.display, fontSize: 11, color: theme.colors.goldDim, letterSpacing: 3, textTransform: 'uppercase', includeFontPadding: false },
+  ornamentSymbol: { color: theme.colors.goldDim, fontSize: moderateScale(10) },
+  ornamentLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(11), color: theme.colors.goldDim, letterSpacing: 3, textTransform: 'uppercase', includeFontPadding: false },
   section: { marginBottom: 20 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   diamond: { width: 6, height: 6, backgroundColor: theme.colors.gold, transform: [{ rotate: '45deg' }], flexShrink: 0 },
-  sectionTitle: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.goldLight, letterSpacing: 2, textTransform: 'uppercase', includeFontPadding: false },
-  searchInput: { borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 3, backgroundColor: theme.colors.background, paddingHorizontal: 14, paddingVertical: 12, fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.parchment, marginBottom: 4 },
-  count: { fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.textMuted, paddingTop: 8, marginBottom: 10 },
+  sectionTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.goldLight, letterSpacing: 2, textTransform: 'uppercase', includeFontPadding: false },
+  searchInput: { borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 3, backgroundColor: theme.colors.background, paddingHorizontal: 14, paddingVertical: 12, fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.parchment, marginBottom: 4 },
+  count: { fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.textMuted, paddingTop: 8, marginBottom: 10 },
   list: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, backgroundColor: theme.colors.panel, overflow: 'hidden' },
   backToCats: { marginBottom: 20 },
-  backToCatsText: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.gold },
+  backToCatsText: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.gold },
 });

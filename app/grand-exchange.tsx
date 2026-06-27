@@ -11,13 +11,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { theme } from '../constants/theme';
+import { moderateScale, scale } from '../constants/responsive';
 import {
   ItemMapping, LatestPrice, TimeseriesPoint, TimeRange,
   fetchMapping, searchMapping, fetchLatestPrice, fetchTimeseries,
   formatGP, formatVolume, itemIconUrl, TIME_RANGE_CONFIG, TIME_RANGES,
 } from '../constants/ge-api';
+import { StorageKeys } from '../constants/storage';
 
-const WATCHLIST_KEY = 'ge_watchlist';
+const WATCHLIST_KEY = StorageKeys.geWatchlist;
 
 // Background
 
@@ -195,18 +197,18 @@ function PriceChart({ data, width, range }: ChartProps) {
 
 const chartStyles = StyleSheet.create({
   empty: { height: 140, alignItems: 'center', justifyContent: 'center' },
-  emptyText: { fontFamily: theme.fonts.display, fontSize: 12, color: theme.colors.textMuted, fontStyle: 'italic' },
+  emptyText: { fontFamily: theme.fonts.display, fontSize: moderateScale(12), color: theme.colors.textMuted, fontStyle: 'italic' },
 });
 
 // Item Detail Panel
 
 function priceFont(formatted: string): number {
   const len = formatted.length;
-  if (len <= 3) return 34;
-  if (len <= 4) return 30;
-  if (len <= 5) return 26;
-  if (len <= 6) return 22;
-  return 18;
+  if (len <= 3) return moderateScale(34);
+  if (len <= 4) return moderateScale(30);
+  if (len <= 5) return moderateScale(26);
+  if (len <= 6) return moderateScale(22);
+  return moderateScale(18);
 }
 
 type ItemDetailProps = {
@@ -365,47 +367,47 @@ function ItemDetailPanel({
 const detailStyles = StyleSheet.create({
   container: { backgroundColor: theme.colors.panel, borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 4, padding: 14, gap: 12, marginBottom: 16 },
   itemHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  itemName: { fontFamily: theme.fonts.display, fontSize: 22, color: theme.colors.parchment, letterSpacing: 0.5, includeFontPadding: false },
-  itemMeta: { fontFamily: theme.fonts.display, fontSize: 16, color: theme.colors.textMuted, marginTop: 3 },
-  itemIcon: { width: 36, height: 36 },
+  itemName: { fontFamily: theme.fonts.display, fontSize: moderateScale(22), color: theme.colors.parchment, letterSpacing: 0.5, includeFontPadding: false },
+  itemMeta: { fontFamily: theme.fonts.display, fontSize: moderateScale(16), color: theme.colors.textMuted, marginTop: 3 },
+  itemIcon: { width: scale(36), height: scale(36) },
   watchlistBtn: { paddingHorizontal: 4 },
-  watchlistStar: { fontSize: 26, color: theme.colors.textMuted },
+  watchlistStar: { fontSize: moderateScale(26), color: theme.colors.textMuted },
   watchlistStarActive: { color: theme.colors.goldLight },
   priceRow: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
   priceTile: { flex: 1, backgroundColor: theme.colors.background, borderWidth: 1, borderRadius: 3, padding: 10, alignItems: 'center', gap: 2 },
   priceTileBuy: { borderColor: theme.colors.borderGold },
   priceTileSell: { borderColor: theme.colors.green },
-  priceTileLabel: { fontFamily: theme.fonts.display, fontSize: 11, color: theme.colors.parchmentDark, letterSpacing: 1, textTransform: 'uppercase' },
-  priceTileValue: { fontFamily: theme.fonts.display, fontSize: 34, color: theme.colors.goldLight, includeFontPadding: false },
+  priceTileLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(11), color: theme.colors.parchmentDark, letterSpacing: 1, textTransform: 'uppercase' },
+  priceTileValue: { fontFamily: theme.fonts.display, fontSize: moderateScale(34), color: theme.colors.goldLight, includeFontPadding: false },
   priceTileValueSell: { color: theme.colors.greenLight },
-  priceTileGP: { fontFamily: theme.fonts.display, fontSize: 14, color: theme.colors.textMuted },
+  priceTileGP: { fontFamily: theme.fonts.display, fontSize: moderateScale(14), color: theme.colors.textMuted },
   priceMiddle: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, gap: 2 },
-  spreadLabel: { fontFamily: theme.fonts.display, fontSize: 12, color: theme.colors.textMuted, letterSpacing: 1, textTransform: 'uppercase' },
-  spreadValue: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchment, includeFontPadding: false },
-  spreadPct: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchmentDark },
+  spreadLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(12), color: theme.colors.textMuted, letterSpacing: 1, textTransform: 'uppercase' },
+  spreadValue: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchment, includeFontPadding: false },
+  spreadPct: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchmentDark },
   alchRow: { flexDirection: 'row', gap: 16 },
-  alchText: { fontFamily: theme.fonts.display, fontSize: 17, color: theme.colors.parchmentDark },
+  alchText: { fontFamily: theme.fonts.display, fontSize: moderateScale(17), color: theme.colors.parchmentDark },
   alchValue: { color: theme.colors.parchment },
   controlsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   rangeRow: { flexDirection: 'row', gap: 4, flex: 1 },
   rangeChip: { flex: 1, alignItems: 'center', paddingVertical: 6, borderRadius: 3, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.background },
   rangeChipActive: { borderColor: theme.colors.borderGold, backgroundColor: theme.colors.panelLight },
-  rangeChipText: { fontFamily: theme.fonts.display, fontSize: 15, color: theme.colors.parchmentDim },
+  rangeChipText: { fontFamily: theme.fonts.display, fontSize: moderateScale(15), color: theme.colors.parchmentDim },
   rangeChipTextActive: { color: theme.colors.goldLight },
   lineToggleRow: { flexDirection: 'row', gap: 4 },
   lineToggle: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 3, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.background },
   lineToggleBuyActive: { borderColor: '#c8a030', backgroundColor: 'rgba(200,160,48,0.15)' },
   lineToggleSellActive: { borderColor: '#3a8a24', backgroundColor: 'rgba(58,138,36,0.15)' },
-  lineToggleText: { fontFamily: theme.fonts.display, fontSize: 14, color: theme.colors.parchmentDim },
+  lineToggleText: { fontFamily: theme.fonts.display, fontSize: moderateScale(14), color: theme.colors.parchmentDim },
   lineToggleBuyText: { color: '#c8a030' },
   lineToggleSellText: { color: theme.colors.greenLight },
   chartContainer: { marginHorizontal: -14 },
   legend: { flexDirection: 'row', gap: 14, justifyContent: 'center' },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendText: { fontFamily: theme.fonts.display, fontSize: 16, color: theme.colors.parchmentDark },
+  legendText: { fontFamily: theme.fonts.display, fontSize: moderateScale(16), color: theme.colors.parchmentDark },
   itemsBtn: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, paddingVertical: 12, alignItems: 'center', backgroundColor: theme.colors.background },
-  itemsBtnText: { fontFamily: theme.fonts.display, fontSize: 17, color: theme.colors.gold },
+  itemsBtnText: { fontFamily: theme.fonts.display, fontSize: moderateScale(17), color: theme.colors.gold },
 });
 
 // Watchlist Card
@@ -434,10 +436,10 @@ function WatchlistCard({ item, onPress }: WatchlistCardProps) {
 }
 
 const watchStyles = StyleSheet.create({
-  card: { width: 90, backgroundColor: theme.colors.panel, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 4, padding: 8, alignItems: 'center', justifyContent: 'space-between', minHeight: 100, marginRight: 8 },
-  icon: { width: 32, height: 32 },
-  name: { fontFamily: theme.fonts.display, fontSize: 15, color: theme.colors.parchmentDark, paddingTop: 10, textAlign: 'center', flex: 1 },
-  price: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.goldLight, includeFontPadding: false, marginTop: 4 },
+  card: { width: scale(90), backgroundColor: theme.colors.panel, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 4, padding: scale(8), alignItems: 'center', justifyContent: 'space-between', minHeight: scale(100), marginRight: scale(8) },
+  icon: { width: scale(32), height: scale(32) },
+  name: { fontFamily: theme.fonts.display, fontSize: moderateScale(15), color: theme.colors.parchmentDark, paddingTop: scale(10), textAlign: 'center', flex: 1 },
+  price: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.goldLight, includeFontPadding: false, marginTop: scale(4) },
 });
 
 //  Main Screen
@@ -711,29 +713,29 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 40 },
   header: { alignItems: 'center', paddingTop: 10, paddingBottom: 6, marginBottom: 12, gap: 8 },
   backButton: { alignSelf: 'flex-start', paddingVertical: 4, paddingBottom: 10 },
-  backButtonText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.gold, letterSpacing: 0.5 },
-  screenTitle: { fontFamily: theme.fonts.display, fontSize: 34, color: theme.colors.gold, letterSpacing: 1, textShadowColor: 'rgba(200,160,48,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12, includeFontPadding: false, lineHeight: 42 },
-  screenSubtitle: { fontFamily: theme.fonts.display, fontSize: 14, color: theme.colors.parchmentDim, fontStyle: 'italic', letterSpacing: 1, includeFontPadding: false },
+  backButtonText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.gold, letterSpacing: 0.5 },
+  screenTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(34), color: theme.colors.gold, letterSpacing: 1, textShadowColor: 'rgba(200,160,48,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12, includeFontPadding: false, lineHeight: moderateScale(42) },
+  screenSubtitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(14), color: theme.colors.parchmentDim, fontStyle: 'italic', letterSpacing: 1, includeFontPadding: false },
   ornamentRow: { flexDirection: 'row', alignItems: 'center', width: '90%', gap: 6 },
   taglineRow: { flexDirection: 'row', alignItems: 'center', width: '90%', gap: 6 },
   ornamentLine: { flex: 1, height: 1, backgroundColor: theme.colors.border },
-  ornamentSymbol: { color: theme.colors.goldDim, fontSize: 10 },
-  ornamentLabel: { fontFamily: theme.fonts.display, fontSize: 11, color: theme.colors.goldDim, letterSpacing: 3, textTransform: 'uppercase', includeFontPadding: false },
+  ornamentSymbol: { color: theme.colors.goldDim, fontSize: moderateScale(10) },
+  ornamentLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(11), color: theme.colors.goldDim, letterSpacing: 3, textTransform: 'uppercase', includeFontPadding: false },
   section: { marginBottom: 20 },
   skillsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 20 },
   diamond: { width: 6, height: 6, backgroundColor: theme.colors.gold, transform: [{ rotate: '45deg' }], flexShrink: 0 },
-  sectionTitle: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.goldLight, letterSpacing: 2, textTransform: 'uppercase', includeFontPadding: false },
+  sectionTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.goldLight, letterSpacing: 2, textTransform: 'uppercase', includeFontPadding: false },
   searchRow: { flexDirection: 'row', alignItems: 'center' },
-  searchInput: { flex: 1, borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 3, backgroundColor: theme.colors.background, paddingHorizontal: 14, paddingVertical: 12, fontFamily: theme.fonts.display, fontSize: 16, color: theme.colors.parchment },
+  searchInput: { flex: 1, borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 3, backgroundColor: theme.colors.background, paddingHorizontal: 14, paddingVertical: 12, fontFamily: theme.fonts.display, fontSize: moderateScale(16), color: theme.colors.parchment },
   searchResults: { marginTop: 4, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, backgroundColor: theme.colors.panel, overflow: 'hidden' },
   searchResultItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  searchResultIcon: { width: 28, height: 28 },
-  searchResultName: { fontFamily: theme.fonts.display, fontSize: 15, color: theme.colors.parchment },
-  searchResultMeta: { fontFamily: theme.fonts.display, fontSize: 11, color: theme.colors.textMuted, marginTop: 1 },
+  searchResultIcon: { width: scale(28), height: scale(28) },
+  searchResultName: { fontFamily: theme.fonts.display, fontSize: moderateScale(15), color: theme.colors.parchment },
+  searchResultMeta: { fontFamily: theme.fonts.display, fontSize: moderateScale(11), color: theme.colors.textMuted, marginTop: 1 },
   loadingBox: { alignItems: 'center', paddingVertical: 32, gap: 10 },
-  loadingText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchmentDim },
+  loadingText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchmentDim },
   emptyState: { alignItems: 'center', paddingVertical: 40, gap: 12 },
-  emptyIcon: { width: 56, height: 56, opacity: 0.5 },
-  emptyText: { fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.parchmentDim, textAlign: 'center', lineHeight: 24, paddingHorizontal: 20 },
-  emptySubtext: { fontFamily: theme.fonts.display, fontSize: 16, color: theme.colors.textMuted, textAlign: 'center' },
+  emptyIcon: { width: scale(56), height: scale(56), opacity: 0.5 },
+  emptyText: { fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.parchmentDim, textAlign: 'center', lineHeight: moderateScale(24), paddingHorizontal: 20 },
+  emptySubtext: { fontFamily: theme.fonts.display, fontSize: moderateScale(16), color: theme.colors.textMuted, textAlign: 'center' },
 });

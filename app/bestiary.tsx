@@ -2,18 +2,17 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput,
   Image, ActivityIndicator, useWindowDimensions, Keyboard,
-  KeyboardAvoidingView, Platform, Pressable,
+  KeyboardAvoidingView, Platform, Pressable, ImageSourcePropType,
 } from 'react-native';
 import Svg, { Defs, Rect, RadialGradient, Stop } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { theme } from '../constants/theme';
-
-const WIKI_API = 'https://oldschool.runescape.wiki/api.php';
-const UA = 'AdventurersLog-App/1.0';
+import { moderateScale, scale } from '../constants/responsive';
+import { WIKI_API, wikiFetch } from '../constants/wiki';
 
 //  Monster categories
-const MONSTER_CATEGORIES: { label: string; image: any; wikiCategory: string; description: string }[] = [
+const MONSTER_CATEGORIES: { label: string; image: ImageSourcePropType; wikiCategory: string; description: string }[] = [
   { label: 'Bosses',          image: require('../assets/icons/bestiary/bosses.png'),       wikiCategory: 'Bosses',                   description: 'Powerful solo & raid bosses' },
   { label: 'Slayer',          image: require('../assets/icons/bestiary/slayer.png'),       wikiCategory: 'Slayer monsters',           description: 'Assignable slayer creatures' },
   { label: 'Dragons',         image: require('../assets/icons/bestiary/dragons.png'),      wikiCategory: 'Dragons',                  description: 'Chromatic, metallic & more' },
@@ -66,22 +65,95 @@ type MonsterDetail = {
 
 async function searchMonsters(query: string): Promise<MonsterSummary[]> {
   try {
-    const url = `${WIKI_API}?action=opensearch&search=${encodeURIComponent(query)}&limit=12&format=json&origin=*`;
-    const res = await fetch(url, { headers: { 'User-Agent': UA } });
+    // Scope the search to monster pages only. The old opensearch endpoint did a
+    // generic article search, so "o" returned wiki meta pages ("Old School
+    // RuneScape Wiki", "Oak plank", etc.). incategory:Monsters keeps it to
+    // monsters; intitle: keeps it a name lookup rather than full-text body match.
+    const srsearch = `incategory:Monsters intitle:${query}`;
+    const url = `${WIKI_API}?action=query&list=search&srsearch=${encodeURIComponent(srsearch)}&srnamespace=0&srlimit=12&format=json&origin=*`;
+    const res = await wikiFetch(url);
     const data = await res.json();
-    const titles: string[] = data[1] ?? [];
-    return titles.map((title, i) => ({ title, pageid: i }));
-  } catch { return []; }
+    const hits: any[] = data?.query?.search ?? [];
+    return hits.map((h) => ({ title: h.title, pageid: h.pageid }));
+  } catch (err) {
+    if (__DEV__) console.warn('[bestiary] searchMonsters failed:', err);
+    return [];
+  }
+}
+
+// Wiki "meta" pages that live inside monster categories but aren't monsters.
+// Stripped from every category list.
+const CATEGORY_META_PAGES = new Set([
+  'Boss', 'Boss kill count', 'Bosses', 'Barrows brothers',
+  'Slayer monster', 'Slayer monsters', 'Dragon', 'Dragons',
+]);
+
+// Curated display order for the Bosses category: well-known bosses players
+// recognize, shown first in a roughly progression-flavored order. Any boss not
+// listed here is appended alphabetically (so new/obscure bosses still appear).
+const BOSS_ORDER = [
+  // Beginner / quest
+  'Bryophyta', 'Obor', 'Scurrius', 'The Mimic', 'Tempoross', 'Wintertodt',
+  'Giant Mole', 'Deranged archaeologist', 'Crazy archaeologist',
+  // Slayer / mid
+  'Sarachnis', 'Kraken', 'Cerberus', 'Abyssal Sire', 'Thermonuclear smoke devil',
+  'Alchemical Hydra', 'Grotesque Guardians',
+  // God Wars
+  "Commander Zilyana", "General Graardor", "K'ril Tsutsaroth", 'Kree\'arra', 'Nex',
+  // Wilderness
+  'Callisto', 'Venenatis', "Vet'ion", 'Calvar\'ion', 'Artio', 'Spindel',
+  'Chaos Elemental', 'Chaos Fanatic', 'Scorpia', 'King Black Dragon',
+  // Dagannoth / classic
+  'Dagannoth Kings', 'Dagannoth Prime', 'Dagannoth Rex', 'Dagannoth Supreme',
+  'Corporeal Beast', 'Kalphite Queen', 'Barrows', 'Zulrah', 'Vorkath',
+  // Endgame / solo
+  'Phantom Muspah', 'The Nightmare', "Phosani's Nightmare", 'Duke Sucellus',
+  'The Leviathan', 'The Whisperer', 'Vardorvis', 'Araxxor',
+  // Raid bosses (the raids themselves are locations, not category members)
+  'Great Olm', 'Verzik Vitur', 'Akkha', 'Ba-Ba', 'Kephri', 'Zebak', 'Tumeken\'s Warden',
+  // Inferno / Fight Caves
+  'TzTok-Jad', 'TzKal-Zuk',
+];
+const BOSS_RANK: Record<string, number> = Object.fromEntries(
+  BOSS_ORDER.map((name, i) => [name, i]),
+);
+
+function orderCategoryMonsters(category: string, monsters: MonsterSummary[]): MonsterSummary[] {
+  if (category !== 'Bosses') {
+    return [...monsters].sort((a, b) => a.title.localeCompare(b.title));
+  }
+  // Curated bosses first (in BOSS_ORDER), then the rest alphabetically.
+  return [...monsters].sort((a, b) => {
+    const ra = BOSS_RANK[a.title] ?? Infinity;
+    const rb = BOSS_RANK[b.title] ?? Infinity;
+    if (ra !== rb) return ra - rb;
+    return a.title.localeCompare(b.title);
+  });
 }
 
 async function fetchCategoryMonsters(category: string): Promise<MonsterSummary[]> {
   try {
-    const url = `${WIKI_API}?action=query&list=categorymembers&cmtitle=Category:${encodeURIComponent(category)}&cmlimit=50&cmtype=page&format=json&origin=*`;
-    const res = await fetch(url, { headers: { 'User-Agent': UA } });
-    const data = await res.json();
-    const members = data?.query?.categorymembers ?? [];
-    return members.map((m: any) => ({ title: m.title, pageid: m.pageid }));
-  } catch { return []; }
+    const all: MonsterSummary[] = [];
+    let cmcontinue: string | undefined;
+    // Paginate to completeness. cmlimit=500 covers every current category in one
+    // request, but follow cmcontinue defensively in case one ever exceeds it.
+    do {
+      const cont = cmcontinue ? `&cmcontinue=${encodeURIComponent(cmcontinue)}` : '';
+      const url = `${WIKI_API}?action=query&list=categorymembers&cmtitle=Category:${encodeURIComponent(category)}&cmlimit=500&cmtype=page&format=json&origin=*${cont}`;
+      const res = await wikiFetch(url);
+      const data = await res.json();
+      const members = data?.query?.categorymembers ?? [];
+      for (const m of members) {
+        if (CATEGORY_META_PAGES.has(m.title)) continue; // skip meta pages
+        all.push({ title: m.title, pageid: m.pageid });
+      }
+      cmcontinue = data?.continue?.cmcontinue;
+    } while (cmcontinue);
+    return orderCategoryMonsters(category, all);
+  } catch (err) {
+    if (__DEV__) console.warn(`[bestiary] fetchCategoryMonsters("${category}") failed:`, err);
+    return [];
+  }
 }
 
 function parseInfoboxValue(wikitext: string, key: string): string | null {
@@ -100,8 +172,8 @@ function parseInfoboxNumber(wikitext: string, key: string): number | undefined {
 async function fetchMonsterDetail(title: string): Promise<MonsterDetail | null> {
   try {
     const [wikitextRes, imageRes] = await Promise.all([
-      fetch(`${WIKI_API}?action=query&prop=revisions&rvprop=content&rvslots=*&titles=${encodeURIComponent(title)}&format=json&origin=*`, { headers: { 'User-Agent': UA } }),
-      fetch(`${WIKI_API}?action=query&titles=File:${encodeURIComponent(title.replace(/ /g, '_'))}.png&prop=imageinfo&iiprop=url&format=json&origin=*`, { headers: { 'User-Agent': UA } }),
+      wikiFetch(`${WIKI_API}?action=query&prop=revisions&rvprop=content&rvslots=*&titles=${encodeURIComponent(title)}&format=json&origin=*`),
+      wikiFetch(`${WIKI_API}?action=query&titles=File:${encodeURIComponent(title.replace(/ /g, '_'))}.png&prop=imageinfo&iiprop=url&format=json&origin=*`),
     ]);
 
     const wikitextData = await wikitextRes.json();
@@ -162,10 +234,13 @@ async function fetchMonsterDetail(title: string): Promise<MonsterDetail | null> 
       attackRanged:  parseInfoboxNumber(wikitext, 'arange'),
       imageUrl,
     };
-  } catch { return null; }
+  } catch (err) {
+    if (__DEV__) console.warn(`[bestiary] fetchMonsterDetail("${title}") failed:`, err);
+    return null;
+  }
 }
 
-//  Background 
+//  Background
 
 function StoneBackground() {
   const { width, height } = useWindowDimensions();
@@ -285,7 +360,7 @@ function MonsterDetailPanel({ monster }: { monster: MonsterDetail }) {
             <View style={mStyles.keyStatTile}>
               <Text style={mStyles.keyStatLabel}>Style</Text>
               <View style={mStyles.keyStatCenter}>
-                <Text style={[mStyles.keyStatValue, { fontSize: 18 }]}>{monster.attackStyle}</Text>
+                <Text style={[mStyles.keyStatValue, { fontSize: moderateScale(18) }]}>{monster.attackStyle}</Text>
               </View>
             </View>
           )}
@@ -344,35 +419,35 @@ function MonsterDetailPanel({ monster }: { monster: MonsterDetail }) {
 const mStyles = StyleSheet.create({
   container: { backgroundColor: theme.colors.panel, borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 4, padding: 14, gap: 12 },
   header: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
-  image: { width: 60, height: 60 },
-  name: { paddingBottom: 10, fontFamily: theme.fonts.display, fontSize: 22, color: theme.colors.parchment, letterSpacing: 0.3, includeFontPadding: false },
-  combat: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.textMuted, marginTop: 4 },
+  image: { width: scale(60), height: scale(60) },
+  name: { paddingBottom: 10, fontFamily: theme.fonts.display, fontSize: moderateScale(22), color: theme.colors.parchment, letterSpacing: 0.3, includeFontPadding: false },
+  combat: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.textMuted, marginTop: 4 },
   tagRow: { paddingBottom: 10, flexDirection: 'row', gap: 6, marginTop: 4, flexWrap: 'wrap' },
   tag: { backgroundColor: theme.colors.panelLight, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, paddingHorizontal: 8, paddingVertical: 3 },
   tagRed: { borderColor: theme.colors.redLight, backgroundColor: 'rgba(139,26,26,0.2)' },
   tagGreen: { borderColor: theme.colors.greenLight, backgroundColor: 'rgba(58,138,36,0.2)' },
-  tagText: { fontFamily: theme.fonts.display, fontSize: 16, color: theme.colors.parchmentDim },
-  examine: { fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.parchmentDim, fontStyle: 'italic', lineHeight: 20 },
+  tagText: { fontFamily: theme.fonts.display, fontSize: moderateScale(16), color: theme.colors.parchmentDim },
+  examine: { fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.parchmentDim, fontStyle: 'italic', lineHeight: moderateScale(20) },
   locationRow: { backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, padding: 10, gap: 4 },
   locationLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  locationLabel: { marginTop: 6, fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.gold, letterSpacing: 1, paddingBottom: 5 },
-  locationText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchment, lineHeight: 30, paddingLeft: 5 },
+  locationLabel: { marginTop: 6, fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.gold, letterSpacing: 1, paddingBottom: 5 },
+  locationText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchment, lineHeight: moderateScale(30), paddingLeft: 5 },
   keyStats: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   keyStatTile: { flex: 1, minWidth: 70, backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, padding: 10, alignItems: 'center' },
-  keyStatLabel: { fontFamily: theme.fonts.display, fontSize: 13, color: theme.colors.parchmentDark, textTransform: 'uppercase' },
+  keyStatLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(13), color: theme.colors.parchmentDark, textTransform: 'uppercase' },
   keyStatCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8 },
-  keyStatValue: { fontFamily: theme.fonts.display, fontSize: 25, color: theme.colors.goldLight, includeFontPadding: false },
+  keyStatValue: { fontFamily: theme.fonts.display, fontSize: moderateScale(25), color: theme.colors.goldLight, includeFontPadding: false },
   slayerRow: { backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, padding: 20, gap: 4 },
-  slayerTitle: { fontFamily: theme.fonts.display, fontSize: 21, color: theme.colors.goldLight },
-  slayerText: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.parchmentDim },
+  slayerTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(21), color: theme.colors.goldLight },
+  slayerText: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.parchmentDim },
   divider: { height: 1, backgroundColor: theme.colors.border },
-  bonusHeader: { fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.gold, letterSpacing: 1, textTransform: 'uppercase' },
+  bonusHeader: { fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.gold, letterSpacing: 1, textTransform: 'uppercase' },
   bonusGrid: { flexDirection: 'row', paddingBottom: 10 },
   bonusCol: { flex: 1, gap: 2 },
   bonusDivider: { width: 1, backgroundColor: theme.colors.border, marginHorizontal: 10 },
   statRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 3, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  statLabel: { fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.parchmentDim },
-  statValue: { fontFamily: theme.fonts.display, fontSize: 20, fontWeight: 'bold' },
+  statLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.parchmentDim },
+  statValue: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), fontWeight: 'bold' },
 });
 
 //  Category Card 
@@ -392,10 +467,10 @@ function CategoryCard({ cat, onPress }: { cat: typeof MONSTER_CATEGORIES[0]; onP
 
 const ccStyles = StyleSheet.create({
   card: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.colors.panel, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 4, padding: 14, marginBottom: 8 },
-  icon: { width: 36, height: 36 },
-  label: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.parchment },
-  desc: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.textMuted, marginTop: 3 },
-  arrow: { fontFamily: theme.fonts.display, fontSize: 24, color: theme.colors.gold },
+  icon: { width: scale(36), height: scale(36) },
+  label: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.parchment },
+  desc: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.textMuted, marginTop: 3 },
+  arrow: { fontFamily: theme.fonts.display, fontSize: moderateScale(24), color: theme.colors.gold },
 });
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
@@ -422,7 +497,9 @@ export default function BestiaryScreen() {
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    if (!searchQuery.trim()) { setSearchResults([]); return; }
+    // Require at least 2 chars: single-letter queries are too broad and the
+    // intitle: search returns noise for them.
+    if (searchQuery.trim().length < 2) { setSearchResults([]); return; }
     searchTimer.current = setTimeout(async () => {
       setSearching(true);
       const results = await searchMonsters(searchQuery);
@@ -609,26 +686,26 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 40 },
   header: { alignItems: 'center', paddingTop: 10, paddingBottom: 6, marginBottom: 12, gap: 8 },
   backButton: { alignSelf: 'flex-start', paddingVertical: 4, paddingBottom: 10 },
-  backButtonText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.gold, letterSpacing: 0.5 },
-  screenTitle: { fontFamily: theme.fonts.display, fontSize: 34, color: theme.colors.gold, letterSpacing: 1, textShadowColor: 'rgba(200,160,48,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12, includeFontPadding: false, lineHeight: 42 },
-  screenSubtitle: { fontFamily: theme.fonts.display, fontSize: 14, color: theme.colors.parchmentDim, fontStyle: 'italic', letterSpacing: 1, includeFontPadding: false },
+  backButtonText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.gold, letterSpacing: 0.5 },
+  screenTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(34), color: theme.colors.gold, letterSpacing: 1, textShadowColor: 'rgba(200,160,48,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12, includeFontPadding: false, lineHeight: moderateScale(42) },
+  screenSubtitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(14), color: theme.colors.parchmentDim, fontStyle: 'italic', letterSpacing: 1, includeFontPadding: false },
   ornamentRow: { flexDirection: 'row', alignItems: 'center', width: '90%', gap: 6 },
   taglineRow: { flexDirection: 'row', alignItems: 'center', width: '90%', gap: 6 },
   ornamentLine: { flex: 1, height: 1, backgroundColor: theme.colors.border },
-  ornamentSymbol: { color: theme.colors.goldDim, fontSize: 10 },
-  ornamentLabel: { fontFamily: theme.fonts.display, fontSize: 11, color: theme.colors.goldDim, letterSpacing: 3, textTransform: 'uppercase', includeFontPadding: false },
-  compassIcon: { width: 25, height: 25, marginRight: 4 },
+  ornamentSymbol: { color: theme.colors.goldDim, fontSize: moderateScale(10) },
+  ornamentLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(11), color: theme.colors.goldDim, letterSpacing: 3, textTransform: 'uppercase', includeFontPadding: false },
+  compassIcon: { width: scale(25), height: scale(25), marginRight: 4 },
   section: { marginBottom: 20 },
   skillsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 20 },
   diamond: { width: 6, height: 6, backgroundColor: theme.colors.gold, transform: [{ rotate: '45deg' }], flexShrink: 0 },
-  sectionTitle: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.goldLight, letterSpacing: 2, textTransform: 'uppercase', includeFontPadding: false },
-  searchInput: { borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 3, backgroundColor: theme.colors.background, paddingHorizontal: 14, paddingVertical: 12, fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.parchment },
+  sectionTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.goldLight, letterSpacing: 2, textTransform: 'uppercase', includeFontPadding: false },
+  searchInput: { borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 3, backgroundColor: theme.colors.background, paddingHorizontal: 14, paddingVertical: 12, fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.parchment },
   resultsList: { marginTop: 8, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, backgroundColor: theme.colors.panel, overflow: 'hidden' },
   resultRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  resultName: { fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.parchment },
-  resultArrow: { fontFamily: theme.fonts.display, fontSize: 22, color: theme.colors.gold },
+  resultName: { fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.parchment },
+  resultArrow: { fontFamily: theme.fonts.display, fontSize: moderateScale(22), color: theme.colors.gold },
   loadingBox: { alignItems: 'center', paddingVertical: 32, gap: 10 },
-  loadingText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchmentDim },
+  loadingText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchmentDim },
   backToCats: { marginBottom: 20 },
-  backToCatsText: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.gold },
+  backToCatsText: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.gold },
 });

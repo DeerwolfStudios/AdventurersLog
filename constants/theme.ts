@@ -1,3 +1,5 @@
+import { scale, moderateScale } from './responsive';
+
 export const theme = {
   colors: {
     background: '#0d0900',
@@ -22,5 +24,27 @@ export const theme = {
   },
   fonts: {
     display: 'IMFellEnglish_400Regular',
+  },
+  // Pre-scaled font sizes (dampened). Collapses the ~78 scattered fontSize literals
+  // into a semantic scale. Always pair with a scaled lineHeight where one is set.
+  fontSize: {
+    hero: moderateScale(38),
+    title: moderateScale(34),
+    heading: moderateScale(24),
+    bodyLg: moderateScale(20),
+    body: moderateScale(18),
+    sm: moderateScale(15),
+    xs: moderateScale(13),
+    caption: moderateScale(11),
+    micro: moderateScale(10),
+  },
+  // Pre-scaled 4-based spacing scale for padding/margin/gap.
+  spacing: {
+    xs: scale(4),
+    sm: scale(8),
+    md: scale(12),
+    lg: scale(16),
+    xl: scale(24),
+    xxl: scale(32),
   },
 };

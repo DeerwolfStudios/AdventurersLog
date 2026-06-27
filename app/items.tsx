@@ -8,7 +8,10 @@ import Svg, { Defs, Rect, RadialGradient, Stop } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { theme } from '../constants/theme';
+import { moderateScale, scale } from '../constants/responsive';
 import { fetchMapping, searchMapping, formatGP, itemIconUrl, ItemMapping } from '../constants/ge-api';
+import { WIKI_API, wikiFetch } from '../constants/wiki';
+import { stripTags } from '../constants/wikitext';
 
 // Category definitions
 
@@ -145,9 +148,6 @@ function StoneBackground() {
 
 // Wiki API
 
-const WIKI_API = 'https://oldschool.runescape.wiki/api.php';
-const UA = 'AdventurersLog-App/1.0';
-
 type WikiSection = { index: string; line: string; level: string };
 
 const WANTED_SECTIONS = [
@@ -169,23 +169,8 @@ type Line =
   | { kind: 'tablerow';    cells: string[] }
   | { kind: 'tableheader'; cells: string[] };
 
-// HTML helpers
-
-function stripTags(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&#160;/g, ' ')
-    .replace(/&ndash;/g, '–')
-    .replace(/&quot;/g, '"')
-    .replace(/&#039;/g, "'")
-    .replace(/\(update\)/gi, '')
-    .replace(/edit\s*\|\s*edit\s*source/gi, '')
-    .replace(/\[\]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+// stripTags (HTML -> plain text, with <br>-anti-fusion) is shared from
+// constants/wikitext.ts. The item-specific section parsing below stays here.
 
 // Extracts <th> and <td> cells from a single <tr> row,
 // preserving which tag type each cell came from.
@@ -332,23 +317,41 @@ function parseHtmlToLines(html: string): Line[] {
 async function fetchItemSections(title: string): Promise<WikiSection[]> {
   try {
     const url = `${WIKI_API}?action=parse&page=${title.replace(/ /g, '_')}&prop=sections&format=json&origin=*`;
-    const res = await fetch(url, { headers: { 'User-Agent': UA } });
+    const res = await wikiFetch(url);
     const data = await res.json();
     if (data.error || !data.parse) return [];
-    return (data.parse.sections || [])
-      .filter((s: any) => WANTED_SECTIONS.some(w => s.line.toLowerCase().includes(w)))
-      .map((s: any) => ({
-        index: s.index,
-        line: stripTags(s.line.replace(/<[^>]+>/g, '')),
-        level: s.level,
-      }));
-  } catch { return []; }
+    // Raw shape of a MediaWiki action=parse&prop=sections entry (the fields we use).
+    type RawSection = { index: string; line: string; level: string };
+    const wanted: RawSection[] = (data.parse.sections || [])
+      .filter((s: RawSection) => WANTED_SECTIONS.some(w => s.line.toLowerCase().includes(w)));
+    // Drop subsections (level 3+) when a kept parent section precedes them: the
+    // parent's lazy-loaded HTML already includes its subsections' tables, so
+    // rendering the subsection again as its own collapsible duplicates it
+    // (e.g. "Shop locations" nested under "Item sources" showed up twice).
+    const filtered = wanted.filter((s, i) => {
+      const level = parseInt(s.level, 10);
+      if (level <= 2) return true;
+      for (let j = i - 1; j >= 0; j--) {
+        const prevLevel = parseInt(wanted[j].level, 10);
+        if (prevLevel < level) return false; // a kept ancestor already covers it
+      }
+      return true;
+    });
+    return filtered.map((s) => ({
+      index: s.index,
+      line: stripTags(s.line.replace(/<[^>]+>/g, '')),
+      level: s.level,
+    }));
+  } catch (err) {
+    if (__DEV__) console.warn(`[items] fetchItemSections("${title}") failed:`, err);
+    return [];
+  }
 }
 
 async function fetchItemSummary(title: string): Promise<string> {
   try {
     const url = `${WIKI_API}?action=parse&page=${title.replace(/ /g, '_')}&section=0&prop=text&format=json&origin=*&redirects=1`;
-    const res = await fetch(url, { headers: { 'User-Agent': UA } });
+    const res = await wikiFetch(url);
     const data = await res.json();
     if (data.error || !data.parse) return '';
     let html = data.parse.text['*'];
@@ -365,17 +368,21 @@ async function fetchItemSummary(title: string): Promise<string> {
       if (text && text.length > 30) paragraphs.push(text);
     }
     return paragraphs.join('\n\n');
-  } catch { return ''; }
+  } catch (err) {
+    if (__DEV__) console.warn(`[items] fetchItemSummary("${title}") failed:`, err);
+    return '';
+  }
 }
 
 async function fetchSectionLines(title: string, sectionIndex: string): Promise<Line[]> {
   try {
     const url = `${WIKI_API}?action=parse&page=${title.replace(/ /g, '_')}&section=${sectionIndex}&prop=text&format=json&origin=*&redirects=1`;
-    const res = await fetch(url, { headers: { 'User-Agent': UA } });
+    const res = await wikiFetch(url);
     const data = await res.json();
     if (data.error || !data.parse) return [{ kind: 'text', text: 'Could not load section.' }];
     return parseHtmlToLines(data.parse.text['*']);
-  } catch {
+  } catch (err) {
+    if (__DEV__) console.warn(`[items] fetchSectionLines("${title}", ${sectionIndex}) failed:`, err);
     return [{ kind: 'text', text: 'Error loading section.' }];
   }
 }
@@ -458,7 +465,7 @@ const tableStyles = StyleSheet.create({
   },
   flexHeaderCell: {
     fontFamily: theme.fonts.display,
-    fontSize: 11,
+    fontSize: moderateScale(11),
     color: theme.colors.gold,
     letterSpacing: 1,
     textAlign: 'left',
@@ -474,10 +481,10 @@ const tableStyles = StyleSheet.create({
   },
   flexDataCell: {
     fontFamily: theme.fonts.display,
-    fontSize: 13,
+    fontSize: moderateScale(13),
     color: theme.colors.parchmentDim,
     textAlign: 'left',
-    lineHeight: 19,
+    lineHeight: moderateScale(19),
     paddingRight: 8,
   },
   outerScroll: {
@@ -497,7 +504,7 @@ const tableStyles = StyleSheet.create({
   },
   scrollHeaderCell: {
     fontFamily: theme.fonts.display,
-    fontSize: 11,
+    fontSize: moderateScale(11),
     color: theme.colors.gold,
     letterSpacing: 1,
     textAlign: 'left',
@@ -513,10 +520,10 @@ const tableStyles = StyleSheet.create({
   },
   scrollDataCell: {
     fontFamily: theme.fonts.display,
-    fontSize: 13,
+    fontSize: moderateScale(13),
     color: theme.colors.parchmentDim,
     textAlign: 'left',
-    lineHeight: 19,
+    lineHeight: moderateScale(19),
     paddingRight: 8,
   },
   dataRowAlt: {
@@ -616,14 +623,14 @@ const kvBlockStyles = StyleSheet.create({
   },
   label: {
     fontFamily: theme.fonts.display,
-    fontSize: 13,
+    fontSize: moderateScale(13),
     color: theme.colors.gold,
     letterSpacing: 0.5,
     flex: 1,
   },
   value: {
     fontFamily: theme.fonts.display,
-    fontSize: 13,
+    fontSize: moderateScale(13),
     color: theme.colors.parchment,
     flex: 1,
     textAlign: 'right',
@@ -637,7 +644,7 @@ const kvBlockStyles = StyleSheet.create({
   },
   noteText: {
     fontFamily: theme.fonts.display,
-    fontSize: 13,
+    fontSize: moderateScale(13),
     color: theme.colors.parchmentDim,
     fontStyle: 'italic',
   },
@@ -699,7 +706,7 @@ function MaterialsHeader() {
 const lineStyles = StyleSheet.create({
   subhead: {
     fontFamily: theme.fonts.display,
-    fontSize: 13,
+    fontSize: moderateScale(13),
     color: theme.colors.gold,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
@@ -719,7 +726,7 @@ const lineStyles = StyleSheet.create({
   },
   materialsHeaderCell: {
     fontFamily: theme.fonts.display,
-    fontSize: 11,
+    fontSize: moderateScale(11),
     color: theme.colors.gold,
     letterSpacing: 1,
     flex: 1,
@@ -738,20 +745,20 @@ const lineStyles = StyleSheet.create({
   },
   materialName: {
     fontFamily: theme.fonts.display,
-    fontSize: 15,
+    fontSize: moderateScale(15),
     color: theme.colors.parchment,
     flex: 2,
   },
   materialQty: {
     fontFamily: theme.fonts.display,
-    fontSize: 15,
+    fontSize: moderateScale(15),
     color: theme.colors.parchmentDim,
     flex: 1,
     textAlign: 'left',
   },
   materialCost: {
     fontFamily: theme.fonts.display,
-    fontSize: 15,
+    fontSize: moderateScale(15),
     color: theme.colors.parchmentDim,
     flex: 1,
     textAlign: 'left',
@@ -767,14 +774,14 @@ const lineStyles = StyleSheet.create({
   },
   summaryLabel: {
     fontFamily: theme.fonts.display,
-    fontSize: 13,
+    fontSize: moderateScale(13),
     color: theme.colors.gold,
     fontStyle: 'italic',
     flex: 1,
   },
   summaryValue: {
     fontFamily: theme.fonts.display,
-    fontSize: 13,
+    fontSize: moderateScale(13),
     color: theme.colors.parchmentDim,
     textAlign: 'left',
   },
@@ -786,15 +793,15 @@ const lineStyles = StyleSheet.create({
   },
   bulletDot: {
     fontFamily: theme.fonts.display,
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: theme.colors.gold,
   },
   bulletText: {
     fontFamily: theme.fonts.display,
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: theme.colors.parchmentDim,
     flex: 1,
-    lineHeight: 20,
+    lineHeight: moderateScale(20),
   },
   textBlock: {
     borderLeftWidth: 2,
@@ -805,9 +812,9 @@ const lineStyles = StyleSheet.create({
   },
   textContent: {
     fontFamily: theme.fonts.display,
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: theme.colors.parchmentDim,
-    lineHeight: 21,
+    lineHeight: moderateScale(21),
   },
 });
 
@@ -843,9 +850,9 @@ const summaryStyles = StyleSheet.create({
   },
   text: {
     fontFamily: theme.fonts.display,
-    fontSize: 18,
+    fontSize: moderateScale(18),
     color: theme.colors.parchmentDim,
-    lineHeight: 25,
+    lineHeight: moderateScale(25),
   },
 });
 
@@ -922,8 +929,8 @@ function ExpandableSection({ title, itemName, sectionIndex }: ExpandableSectionP
 const secStyles = StyleSheet.create({
   container: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, overflow: 'hidden', marginBottom: 4 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 11, paddingHorizontal: 12, backgroundColor: theme.colors.panelLight },
-  title: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchment, flex: 1 },
-  chevron: { color: theme.colors.gold, fontSize: 20, marginLeft: 8 },
+  title: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchment, flex: 1 },
+  chevron: { color: theme.colors.gold, fontSize: moderateScale(20), marginLeft: 8 },
   body: { backgroundColor: theme.colors.background, padding: 12, borderTopWidth: 1, borderTopColor: theme.colors.border },
 });
 
@@ -1035,25 +1042,25 @@ function ItemDetailPanel({ item, onViewGE }: ItemDetailProps) {
 const detailStyles = StyleSheet.create({
   container: { backgroundColor: theme.colors.panel, borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 4, padding: 14, gap: 12, marginBottom: 16 },
   header: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
-  icon: { width: 44, height: 44 },
-  name: { fontFamily: theme.fonts.display, fontSize: 25, color: theme.colors.parchment, letterSpacing: 0.3, includeFontPadding: false },
-  meta: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.textMuted, marginTop: 3 },
-  examine: { fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.parchmentDim, fontStyle: 'italic', lineHeight: 30 },
+  icon: { width: scale(44), height: scale(44) },
+  name: { fontFamily: theme.fonts.display, fontSize: moderateScale(25), color: theme.colors.parchment, letterSpacing: 0.3, includeFontPadding: false },
+  meta: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.textMuted, marginTop: 3 },
+  examine: { fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.parchmentDim, fontStyle: 'italic', lineHeight: moderateScale(30) },
   statsGrid: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   statTile: { flex: 1, minWidth: 80, backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, padding: 10, alignItems: 'center', gap: 2 },
-  statLabel: { fontFamily: theme.fonts.display, fontSize: 10, color: theme.colors.parchmentDark, letterSpacing: 1, textTransform: 'uppercase' },
-  statValue: { fontFamily: theme.fonts.display, fontSize: 25, color: theme.colors.goldLight, includeFontPadding: false },
-  statUnit: { fontFamily: theme.fonts.display, fontSize: 10, color: theme.colors.textMuted },
+  statLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(10), color: theme.colors.parchmentDark, letterSpacing: 1, textTransform: 'uppercase' },
+  statValue: { fontFamily: theme.fonts.display, fontSize: moderateScale(25), color: theme.colors.goldLight, includeFontPadding: false },
+  statUnit: { fontFamily: theme.fonts.display, fontSize: moderateScale(10), color: theme.colors.textMuted },
   sectionsLoading: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
-  sectionsLoadingText: { fontFamily: theme.fonts.display, fontSize: 15, color: theme.colors.textMuted },
+  sectionsLoadingText: { fontFamily: theme.fonts.display, fontSize: moderateScale(15), color: theme.colors.textMuted },
   sectionsContainer: { gap: 6, paddingTop: 10 },
   sectionsDivider: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
   dividerLine: { marginBottom: 10, flex: 1, height: 1, backgroundColor: theme.colors.border },
   diamond: { marginBottom: 10, width: 5, height: 5, backgroundColor: theme.colors.gold, transform: [{ rotate: '45deg' }] },
-  sectionsLabel: { marginBottom: 10, fontFamily: theme.fonts.display, fontSize: 15, color: theme.colors.goldDim, letterSpacing: 2 },
+  sectionsLabel: { marginBottom: 10, fontFamily: theme.fonts.display, fontSize: moderateScale(15), color: theme.colors.goldDim, letterSpacing: 2 },
   geButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.colors.gold, borderRadius: 6, paddingVertical: 12 },
-  geIcon: { width: 20, height: 20 },
-  geButtonText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.background, fontWeight: '900', letterSpacing: 0.5 },
+  geIcon: { width: scale(20), height: scale(20) },
+  geButtonText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.background, fontWeight: '900', letterSpacing: 0.5 },
 });
 
 // ─── Category Row ─────────────────────────────────────────────────────────────
@@ -1101,16 +1108,16 @@ function CategoryRow({ letter, expanded, onToggle, onSelectCategory }: CategoryR
 
 const catStyles = StyleSheet.create({
   letterRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  letterBadge: { width: 30, height: 30, borderRadius: 3, backgroundColor: theme.colors.panelLight, borderWidth: 1, borderColor: theme.colors.borderGold, alignItems: 'center', justifyContent: 'center' },
-  letterText: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.goldLight, fontWeight: 'bold' },
+  letterBadge: { width: scale(30), height: scale(30), borderRadius: 3, backgroundColor: theme.colors.panelLight, borderWidth: 1, borderColor: theme.colors.borderGold, alignItems: 'center', justifyContent: 'center' },
+  letterText: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.goldLight, fontWeight: 'bold' },
   previewRow: { flex: 1, flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  previewLabel: { fontFamily: theme.fonts.display, fontSize: 17, color: theme.colors.parchmentDim },
-  previewMore: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.textMuted },
-  chevron: { color: theme.colors.gold, fontSize: 20 },
+  previewLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(17), color: theme.colors.parchmentDim },
+  previewMore: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.textMuted },
+  chevron: { color: theme.colors.gold, fontSize: moderateScale(20) },
   subcatList: { backgroundColor: theme.colors.panel, borderRadius: 3, marginBottom: 4, overflow: 'hidden' },
   subcatItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  subcatText: { fontFamily: theme.fonts.display, fontSize: 17, color: theme.colors.parchment },
-  subcatArrow: { fontFamily: theme.fonts.display, fontSize: 22, color: theme.colors.gold },
+  subcatText: { fontFamily: theme.fonts.display, fontSize: moderateScale(17), color: theme.colors.parchment },
+  subcatArrow: { fontFamily: theme.fonts.display, fontSize: moderateScale(22), color: theme.colors.gold },
 });
 
 // ─── Search Result Item ───────────────────────────────────────────────────────
@@ -1140,10 +1147,10 @@ function ResultItem({ item, onPress }: ResultItemProps) {
 
 const resultStyles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  icon: { width: 32, height: 32 },
-  name: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.parchment },
-  meta: { fontFamily: theme.fonts.display, fontSize: 17, color: theme.colors.textMuted, marginTop: 2 },
-  limit: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchmentDark },
+  icon: { width: scale(32), height: scale(32) },
+  name: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.parchment },
+  meta: { fontFamily: theme.fonts.display, fontSize: moderateScale(17), color: theme.colors.textMuted, marginTop: 2 },
+  limit: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchmentDark },
 });
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
@@ -1352,22 +1359,22 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 40 },
   header: { alignItems: 'center', paddingTop: 10, paddingBottom: 6, marginBottom: 12, gap: 8 },
   backButton: { alignSelf: 'flex-start', paddingVertical: 4, paddingBottom: 10 },
-  backButtonText: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.gold, letterSpacing: 0.5 },
-  screenTitle: { fontFamily: theme.fonts.display, fontSize: 34, color: theme.colors.gold, letterSpacing: 1, textShadowColor: 'rgba(200,160,48,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12, includeFontPadding: false, lineHeight: 42 },
-  screenSubtitle: { fontFamily: theme.fonts.display, fontSize: 14, color: theme.colors.parchmentDim, fontStyle: 'italic', letterSpacing: 1, includeFontPadding: false },
+  backButtonText: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.gold, letterSpacing: 0.5 },
+  screenTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(34), color: theme.colors.gold, letterSpacing: 1, textShadowColor: 'rgba(200,160,48,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12, includeFontPadding: false, lineHeight: moderateScale(42) },
+  screenSubtitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(14), color: theme.colors.parchmentDim, fontStyle: 'italic', letterSpacing: 1, includeFontPadding: false },
   ornamentRow: { flexDirection: 'row', alignItems: 'center', width: '90%', gap: 6 },
   taglineRow: { flexDirection: 'row', alignItems: 'center', width: '90%', gap: 6 },
   ornamentLine: { flex: 1, height: 1, backgroundColor: theme.colors.border },
-  ornamentSymbol: { color: theme.colors.goldDim, fontSize: 10 },
-  ornamentLabel: { fontFamily: theme.fonts.display, fontSize: 11, color: theme.colors.goldDim, letterSpacing: 3, textTransform: 'uppercase', includeFontPadding: false },
+  ornamentSymbol: { color: theme.colors.goldDim, fontSize: moderateScale(10) },
+  ornamentLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(11), color: theme.colors.goldDim, letterSpacing: 3, textTransform: 'uppercase', includeFontPadding: false },
   section: { marginBottom: 20 },
   skillsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 20 },
   diamond: { width: 6, height: 6, backgroundColor: theme.colors.gold, transform: [{ rotate: '45deg' }], flexShrink: 0 },
-  sectionTitle: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.goldLight, letterSpacing: 2, textTransform: 'uppercase', includeFontPadding: false },
+  sectionTitle: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.goldLight, letterSpacing: 2, textTransform: 'uppercase', includeFontPadding: false },
   searchRow: { flexDirection: 'row', alignItems: 'center' },
-  searchInput: { flex: 1, borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 3, backgroundColor: theme.colors.background, paddingHorizontal: 14, paddingVertical: 12, fontFamily: theme.fonts.display, fontSize: 19, color: theme.colors.parchment },
+  searchInput: { flex: 1, borderWidth: 1.5, borderColor: theme.colors.borderGold, borderRadius: 3, backgroundColor: theme.colors.background, paddingHorizontal: 14, paddingVertical: 12, fontFamily: theme.fonts.display, fontSize: moderateScale(19), color: theme.colors.parchment },
   resultsList: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, backgroundColor: theme.colors.panel, overflow: 'hidden' },
   categoryList: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 3, backgroundColor: theme.colors.panel, overflow: 'hidden', paddingHorizontal: 8 },
   backToCats: { marginBottom: 20 },
-  backToCatsText: { fontFamily: theme.fonts.display, fontSize: 20, color: theme.colors.gold },
+  backToCatsText: { fontFamily: theme.fonts.display, fontSize: moderateScale(20), color: theme.colors.gold },
 });

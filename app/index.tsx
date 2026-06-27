@@ -16,6 +16,7 @@ import Svg, { Defs, Pattern, Rect, Path, RadialGradient, Stop } from 'react-nati
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../constants/theme';
+import { moderateScale, scale } from '../constants/responsive';
 import MenuButton from '../components/MenuButton';
 import SectionHeader from '../components/SectionHeader';
 
@@ -482,11 +483,11 @@ const styles = StyleSheet.create({
   scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingBottom: 30 },
   header: { alignItems: 'center', paddingTop: 16, paddingBottom: 12, marginBottom: 6, gap: 4 },
-  logo: { width: '85%', height: 80, marginBottom: 2 },
+  logo: { width: '85%', height: scale(80), marginBottom: 2 },
   titleContainer: { alignItems: 'center', gap: 2 },
   title: {
     fontFamily: theme.fonts.display,
-    fontSize: 38,
+    fontSize: moderateScale(38),
     letterSpacing: 1,
     paddingTop: 10,
     paddingBottom: 10,
@@ -496,11 +497,11 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 12,
   },
-  tagline: { fontFamily: theme.fonts.display, fontSize: 14, color: theme.colors.parchmentDim, letterSpacing: 1, fontStyle: 'italic' },
+  tagline: { fontFamily: theme.fonts.display, fontSize: moderateScale(14), color: theme.colors.parchmentDim, letterSpacing: 1, fontStyle: 'italic' },
   ornamentRow: { flexDirection: 'row', alignItems: 'center', width: '90%', gap: 6 },
   ornamentLine: { flex: 1, height: 1, backgroundColor: theme.colors.border },
-  ornamentSymbol: { color: theme.colors.goldDim, fontSize: 10 },
-  ornamentLabel: { fontFamily: theme.fonts.display, fontSize: 11, color: theme.colors.goldDim, letterSpacing: 3, textTransform: 'uppercase' },
+  ornamentSymbol: { color: theme.colors.goldDim, fontSize: moderateScale(10) },
+  ornamentLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(11), color: theme.colors.goldDim, letterSpacing: 3, textTransform: 'uppercase' },
   searchContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, marginTop: 5 },
   searchInput: {
     flex: 1,
@@ -511,11 +512,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontFamily: theme.fonts.display,
-    fontSize: 18,
+    fontSize: moderateScale(18),
     color: theme.colors.parchment,
   },
   searchClear: { position: 'absolute', right: 12, padding: 4 },
-  searchClearText: { fontFamily: theme.fonts.display, fontSize: 16, color: theme.colors.textMuted },
+  searchClearText: { fontFamily: theme.fonts.display, fontSize: moderateScale(16), color: theme.colors.textMuted },
   searchResults: {
     borderWidth: 1,
     borderColor: theme.colors.border,
@@ -533,18 +534,18 @@ const styles = StyleSheet.create({
     borderBottomColor: theme.colors.border,
     gap: 12,
   },
-  searchResultIcon: { width: 28, height: 28 },
-  searchResultLabel: { fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.parchment },
-  searchResultCategory: { fontFamily: theme.fonts.display, fontSize: 14, color: theme.colors.textMuted, marginTop: 2 },
-  searchResultArrow: { fontFamily: theme.fonts.display, fontSize: 22, color: theme.colors.gold },
+  searchResultIcon: { width: scale(28), height: scale(28) },
+  searchResultLabel: { fontFamily: theme.fonts.display, fontSize: moderateScale(18), color: theme.colors.parchment },
+  searchResultCategory: { fontFamily: theme.fonts.display, fontSize: moderateScale(14), color: theme.colors.textMuted, marginTop: 2 },
+  searchResultArrow: { fontFamily: theme.fonts.display, fontSize: moderateScale(22), color: theme.colors.gold },
   searchEmpty: { paddingVertical: 20, alignItems: 'center', marginBottom: 16 },
-  searchEmptyText: { fontFamily: theme.fonts.display, fontSize: 17, color: theme.colors.textMuted, fontStyle: 'italic' },
+  searchEmptyText: { fontFamily: theme.fonts.display, fontSize: moderateScale(17), color: theme.colors.textMuted, fontStyle: 'italic' },
   sectionsContainer: { gap: 6, marginTop: 12 },
   section: { marginBottom: 8 },
   row: { flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-start', gap: 10, marginBottom: 10 },
   buttonHalf: { flex: 1 },
   buttonSingle: { width: '48%', maxWidth: '48%' },
   footer: { alignItems: 'center', paddingTop: 18, paddingBottom: 4, gap: 6 },
-  footerText: { fontFamily: theme.fonts.display, fontSize: 11, color: theme.colors.parchmentDark, letterSpacing: 1 },
-  footerSub: { fontFamily: theme.fonts.display, fontSize: 9, color: theme.colors.textMuted, letterSpacing: 0.5 },
+  footerText: { fontFamily: theme.fonts.display, fontSize: moderateScale(11), color: theme.colors.parchmentDark, letterSpacing: 1 },
+  footerSub: { fontFamily: theme.fonts.display, fontSize: moderateScale(9), color: theme.colors.textMuted, letterSpacing: 0.5 },
 });
